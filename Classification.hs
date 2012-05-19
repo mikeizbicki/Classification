@@ -1,6 +1,7 @@
 module Classification 
     where
       
+import Control.Monad.Writer
 import Database.HDBC
 
 import qualified Data.Map as Map
@@ -46,3 +47,9 @@ errorRate :: PerformanceDesc a -> Double
 errorRate (PD xs) = err $ foldl add (0,0) $ map (\(l,(t,f))->(t,f)) $ Map.toList xs
     where add (t1,f1) (t2,f2) = (t1+t2,f1+f2)
           err (t,f) = (fromIntegral f)/(fromIntegral $ t+f)
+
+-- Logging
+
+type LogAI a = Writer [String] a
+
+logAI str = tell [str]

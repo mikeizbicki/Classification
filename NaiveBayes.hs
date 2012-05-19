@@ -1,6 +1,7 @@
 module NaiveBayes
     where
 
+import Data.List
 import Data.List.Extras.Argmax
 import qualified Data.Map as Map
 import Database.HDBC
@@ -10,24 +11,24 @@ import Classification
 
 -- Data types
 
-data NBayes a = NBayes (Map.Map a Int)
-                     [NBayesComponent a] 
+data NBayes a = NBayes !(Map.Map a Int)
+                     ![NBayesComponent a] 
     deriving Show
 
-data NBayesComponent a = NBayesComponent (Map.Map a NBayesDist)
+data NBayesComponent a = NBayesComponent !(Map.Map a NBayesDist)
     deriving Show
     
-data NBayesDist = Gaussian Double -- M
-                           Double -- S
-                           Double -- k
-                | PDF (Map.Map String Int)
+data NBayesDist = Gaussian !Double -- M
+                           !Double -- S
+                           !Double -- k
+                | PDF !(Map.Map String Int)
 --                 | PDF (Map.Map SqlValue Int)
     deriving Show
 
 -- Training
 
 train :: (Ord a) => [(a,[SqlValue])] -> NBayes a
-train xs = foldl trainItr emptyBayes xs
+train xs = foldl' trainItr emptyBayes xs
     where emptyBayes = NBayes Map.empty $ replicate (length $ snd $ head xs) $ NBayesComponent $ Map.empty
 
 trainItr :: (Ord a) => NBayes a -> (a,[SqlValue]) -> NBayes a
@@ -66,7 +67,7 @@ probList (NBayes labelC compL) sqlL = [ (label,prob label)
     where totalCount = Map.fold (+) 0 labelC
           prob label = (probClass label)*(probDataGivenClass label)
           probClass label = (fromIntegral $ (Map.!) labelC label) / (fromIntegral totalCount)
-          probDataGivenClass label = foldl (*) 1 $ map (probComp label) $ zip sqlL compL
+          probDataGivenClass label = foldl' (*) 1 $ map (probComp label) $ zip sqlL compL
           keyList m = map fst $ Map.toAscList m
 
 probComp :: (Ord a) => a -> (SqlValue,NBayesComponent a) -> Prob
