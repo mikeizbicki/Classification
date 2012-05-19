@@ -59,16 +59,22 @@ kFolds k xs = kFoldsItr 0 xs
 
 
 test = do
-    dm <- loadData "testdata/german.data"
---     dm <- loadData "testdata/haberman.data"
+--     dm <- loadData "testdata/german.data"
+    dm <- loadData "testdata/haberman.data"
 --     dm <- loadData "testdata/ionosphere.data"
     let x=do
         ds <- dm
         let bds = toBinaryData "1" ds
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
-        let (ada,out) = (runWriter $ AdaBoost.trainM NaiveBayes.train NaiveBayes.classify bds)
+        
+        let (ada,out) = (runWriter $ AdaBoost.trainM DecisionStump.train DecisionStump.classify bds)
+--         let (ada,out) = (runWriter $ AdaBoost.trainM NaiveBayes.train NaiveBayes.classify bds)
         let adac= AdaBoost.classify ada
-        return $ (out,eval bnbc bds)
+        
+        let dsc = DecisionStump.classify (DecisionStump.train bds)
+        
+--         return $ ([""],eval dsc bds)
+        return $ (out,eval adac bds)
     pExec x
 
 pExec :: (Show a) => Either b ([String],PerformanceDesc a) -> IO ()

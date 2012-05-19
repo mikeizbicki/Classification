@@ -11,6 +11,12 @@ import qualified Data.Map as Map
 type Label = String
 type Prob = Double
 
+instance Ord SqlValue where
+    compare (SqlDouble a) (SqlDouble b) = compare a b
+    compare (SqlString a) (SqlString b) = compare a b
+    compare (SqlDouble a) (SqlString b) = LT
+    compare (SqlString a) (SqlDouble b) = GT
+
 type DataPoint = [SqlValue]
 type TrainingData = [(Label,DataPoint)]
 
