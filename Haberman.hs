@@ -69,8 +69,8 @@ test = do
         
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
         
---         let (ada,out) = (runWriter $ AdaBoost.train DecisionStump.train DecisionStump.classify bds)
-        let (ada,out) = (runWriter $ AdaBoost.train NaiveBayes.train NaiveBayes.classify bds)
+        let (ada,out) = (runWriter $ AdaBoost.train DecisionStump.train DecisionStump.classify bds)
+--         let (ada,out) = (runWriter $ AdaBoost.train NaiveBayes.train NaiveBayes.classify bds)
         let adac= AdaBoost.classify ada
         
         let dsc = DecisionStump.classify (DecisionStump.train bds)

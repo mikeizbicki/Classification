@@ -47,6 +47,11 @@ num2bool n = if n>0
                 then True
                 else False
      
+indicator :: (Num a) => Bool -> a
+indicator bool = if bool
+                    then 1
+                    else 0
+     
 -- Performance measuring
 
 data PerformanceDesc a = PD (Map.Map a (Int,Int))
