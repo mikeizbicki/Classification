@@ -18,45 +18,85 @@ instance (Show b) => Show (AdaBoost b) where
 
 -- training
 
-trainM :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (AdaBoost model)
-trainM trainer classifier ds = do 
-    logAI "trainM"
-    AdaBoost.trainItrM 50 trainer classifier (AdaBoost []) $ zip ws ds
-    where 
+train :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (AdaBoost model)
+train trainer classifier ds = do
+    logAI "train"
+    trainItr 20 trainer classifier wds (AdaBoost [])
+    where wds = map (\(l,d)->(w,(l,d))) ds
           w = 1/(fromIntegral $ length ds)
-          ws = replicate (length ds) w
 
-trainItrM :: Int 
-          -> Trainer Bool model 
-          -> BoolClassifier model 
-          -> AdaBoost model 
-          -> [(Double,(Bool,DataPoint))] 
-          -> LogAI (AdaBoost model)
+trainItr :: Int -> Trainer Bool model -> BoolClassifier model -> [(Double,(Bool,DataPoint))] -> AdaBoost model -> LogAI (AdaBoost model)
+trainItr itr trainer classifier wds (AdaBoost adas) = do
+    logAI $ "trainItr: "++(show itr)
+          ++ "  --  "++(show $ eval (classify adanew) [dp | (w,dp) <- wds])
+          ++ "  --  "++(show err)
+          ++ "  --  "++(show $ errorRate $ eval (classify adanew) [dp | (w,dp) <- wds])
+    if itr==0
+       then return $ AdaBoost adas
+--        else return $ AdaBoost adas
+       else trainItr (itr-1) trainer classifier wdsnew adanew
+       
+    where
+          adanew = AdaBoost $ (alpha,h,classifier):adas
           
-trainItrM n trainer classifier (AdaBoost xs) wds = do
-    logAI $ "trainItrM: "++show n++
-            "  --  "++(show $ eval h_m $ map (\(w,(l,d))->(l,d)) wds)++
-            "  --  "++(show err_m)++
-            "  --  "++(show $ errorRate $ eval (classifier h_m_model) $ map (\(w,(l,d))->(l,d)) wds_m1)
-    if n==0
-       then return $ AdaBoost xs
-       else trainItrM (n-1) trainer classifier (AdaBoost $ (alpha_m,h_m_model,classifier):xs) wds_m1_norm
-    where 
-          h_m_model = trainer $ sample (mkStdGen n) 500 wds
-          h_m = classifier h_m_model
+          h = trainer $ sample (mkStdGen itr) 300 wds
           
-          err_m = (sum $ map (\(w,dp)->w) $ filter (\(w,(l,d))->l==h_m d) wds) -- / (sum $ map (\(w,dp)->w) wds)
+          err = (sum $ [ w * (indicator (l/=classifier h d)) | (w,(l,d)) <- wds ])
+              / (sum $ [ w | (w,(l,d)) <- wds ])
+              
+          alpha = 0.5 * (log $ (1-err)/err)
           
-          alpha_m = 0.5 * log ((1-err_m)/err_m)
+          wdsnew_unnorm = [ (w*(exp $ (-alpha * (indicator (l==classifier h d)))) ,(l,d)) 
+                          | (w,(l,d)) <- wds
+                          ]
+          wdsnew_total = sum [ w | (w,dp) <- wdsnew_unnorm]
+          wdsnew = [ (w/wdsnew_total,dp) | (w,dp) <- wdsnew_unnorm ]
           
-          wds_m1 :: [(Double,(Bool,DataPoint))]
-          wds_m1 = map (\(w,(l,d))->(w*exp (-alpha_m * (indicator l $ h_m d)),(l,d))) wds
-          wds_m1_tot = sum $ map (\(w,dp)->w) wds_m1
-          wds_m1_norm = map (\(w,dp)->(w/wds_m1_tot,dp)) wds_m1
-          
-          indicator a b = if a==b
-                             then 1
-                             else -1
+          indicator bool = if bool
+                              then 1
+                              else 0
+    
+
+-- trainM :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (AdaBoost model)
+-- trainM trainer classifier ds = do 
+--     logAI "trainM"
+--     AdaBoost.trainItrM 50 trainer classifier (AdaBoost []) $ zip ws ds
+--     where 
+--           w = 1/(fromIntegral $ length ds)
+--           ws = replicate (length ds) w
+-- 
+-- trainItrM :: Int 
+--           -> Trainer Bool model 
+--           -> BoolClassifier model 
+--           -> AdaBoost model 
+--           -> [(Double,(Bool,DataPoint))] 
+--           -> LogAI (AdaBoost model)
+--           
+-- trainItrM n trainer classifier (AdaBoost xs) wds = do
+--     logAI $ "trainItrM: "++show n++
+--             "  --  "++(show $ eval h_m $ map (\(w,(l,d))->(l,d)) wds)++
+--             "  --  "++(show err_m)++
+--             "  --  "++(show $ errorRate $ eval (classifier h_m_model) $ map (\(w,(l,d))->(l,d)) wds_m1)
+--     if n==0
+--        then return $ AdaBoost xs
+--        else trainItrM (n-1) trainer classifier (AdaBoost $ (alpha_m,h_m_model,classifier):xs) wds_m1_norm
+--     where 
+--           h_m_model = trainer $ sample (mkStdGen n) 500 wds
+--           h_m = classifier h_m_model
+--           
+--           err_m = (sum $ map (\(w,dp)->w) $ filter (\(w,(l,d))->l==h_m d) wds) -- / (sum $ map (\(w,dp)->w) wds)
+--           
+-- --           alpha_m = 0.5 * log ((1-err_m)/err_m)
+--           alpha_m = 0.5 * (log $ (1+err_m)/(1-err_m))
+--           
+--           wds_m1 :: [(Double,(Bool,DataPoint))]
+--           wds_m1 = map (\(w,(l,d))->(w*exp (-alpha_m * (bool2num l) *(bool2num $ h_m d)),(l,d))) wds
+--           wds_m1_tot = sum $ map (\(w,dp)->w) wds_m1
+--           wds_m1_norm = map (\(w,dp)->(w/wds_m1_tot,dp)) wds_m1
+--           
+--           indicator a b = if a==b
+--                              then 1
+--                              else 0
 
 -- trainItrM  n trainer classifier (AdaBoost xs) wds = do
 --     logAI $ "trainItrM: "++show n++
@@ -70,11 +110,11 @@ trainItrM n trainer classifier (AdaBoost xs) wds = do
 --           newAdaBoost = AdaBoost $ (alpha,newmodel,classifier):xs
 --           
 -- --           newmodel = trainer $ map (\(d,a)->a) wds
---           newmodel = trainer $ sample rgen (2000) wds
+--           newmodel = trainer $ sample rgen (200) wds
 --           rgen = mkStdGen n
 --           
---           alpha = 0.5 * (log $ (1+err)/(1-err))
--- --           alpha = 0.5 * (log $ (1-err)/(err))
+-- --           alpha = 0.5 * (log $ (1+err)/(1-err))
+--           alpha = 0.5 * (log $ (1-err)/(err))
 --           err = weightedError newmodel classifier wds
 --           errUnw = errorRate $ eval (classifier newmodel) $ map (\(w,(l,d))->(l,d)) wds
 --           
@@ -82,10 +122,7 @@ trainItrM n trainer classifier (AdaBoost xs) wds = do
 --           newwds_normconst = foldl (+) 0 $ map (\(w,(l,d))->w) newwds_unnorm
 --           newwds_unnorm = map newweights wds
 --           newweights (w,(l,d)) = (w',(l,d))
---               where w' = w * exp ( (-0.5) * alpha * (xor l $ AdaBoost.classify (AdaBoost xs) d))
---                     xor a b = if a==b
---                                  then 1
---                                  else -1
+--               where w' = w * exp ( (-0.5) * alpha * (bool2num l) * (bool2num $ classify newAdaBoost d))
 
 
 weightedError :: a -> BoolClassifier a-> [(Double,(Bool,DataPoint))] -> Double
@@ -116,10 +153,6 @@ sampleTest = map length $group $ sample (mkStdGen 20) 5500 [(1,n) | n <- [1..50]
 -- classification
 
 classify :: (AdaBoost a) -> DataPoint -> Bool
-classify (AdaBoost xs) dp = 0 < sum list
+classify (AdaBoost xs) dp = num2bool $ sum list
     where
-          list = {-take 1 $-} map (\(alpha,m,c) -> alpha * sign (c m dp)) xs
-          labelgroup (w1,l1) (w2,l2) = l1==l2
-          sign l = if l
-                      then 1
-                      else -1
+          list = map (\(alpha,m,c) -> alpha * (bool2num $ c m dp) ) xs

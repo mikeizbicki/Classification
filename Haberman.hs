@@ -59,16 +59,18 @@ kFolds k xs = kFoldsItr 0 xs
 
 
 test = do
---     dm <- loadData "testdata/german.data"
-    dm <- loadData "testdata/haberman.data"
+    dm <- loadData "testdata/german.data"
+--     dm <- loadData "testdata/haberman.data"
 --     dm <- loadData "testdata/ionosphere.data"
     let x=do
         ds <- dm
         let bds = toBinaryData "1" ds
+--         let bds =  DecisionStump.sqldata
+        
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
         
---         let (ada,out) = (runWriter $ AdaBoost.trainM DecisionStump.train DecisionStump.classify bds)
-        let (ada,out) = (runWriter $ AdaBoost.trainM NaiveBayes.train NaiveBayes.classify bds)
+--         let (ada,out) = (runWriter $ AdaBoost.train DecisionStump.train DecisionStump.classify bds)
+        let (ada,out) = (runWriter $ AdaBoost.train NaiveBayes.train NaiveBayes.classify bds)
         let adac= AdaBoost.classify ada
         
         let dsc = DecisionStump.classify (DecisionStump.train bds)

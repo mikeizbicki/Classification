@@ -37,6 +37,16 @@ toBinaryClassifier label classifier = \model -> \dp -> classifier model dp == la
                                            
 -- toBinaryTrainer :: [(Label,[SqlValue])] -> NBayes
      
+bool2num :: (Num a) => Bool -> a
+bool2num b = if b
+                 then 1
+                 else -1
+                 
+num2bool :: (Num a,Ord a) => a -> Bool
+num2bool n = if n>0
+                then True
+                else False
+     
 -- Performance measuring
 
 data PerformanceDesc a = PD (Map.Map a (Int,Int))
