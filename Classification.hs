@@ -3,6 +3,8 @@ module Classification
       
 import Control.Monad.Writer
 import Database.HDBC
+import System.Random
+import Data.List
 
 import qualified Data.Map as Map
 
@@ -74,3 +76,24 @@ errorRate (PD xs) = err $ foldl add (0,0) $ map (\(l,(t,f))->(t,f)) $ Map.toList
 type LogAI a = Writer [String] a
 
 logAI str = tell [str]
+
+-- Sampling from weighted lists
+
+sample :: (Show a) => StdGen -> Int -> [(Double,a)] -> [a]
+sample rgen n xs = sampleWalk 0 xs randL
+    where totalWeights = sum $ map fst xs
+          randL = sort $ randList rgen n (0,totalWeights)
+
+sampleWalk :: Double -> [(Double,a)] -> [Double] -> [a]
+sampleWalk tally [] _ = []
+sampleWalk tally _ [] = []
+sampleWalk tally xs ys = if ((fst $ head xs)+tally)>(head ys)
+                            then (snd $ head xs):(sampleWalk tally xs $ tail ys)
+                            else sampleWalk (tally+(fst $ head xs)) (tail xs) ys
+
+randList :: StdGen -> Int -> (Double,Double) -> [Double]
+randList rgen 0 interval = []
+randList rgen n interval = r:(randList rgen' (n-1) interval)
+    where (r,rgen') = randomR interval rgen
+
+sampleTest = map length $group $ sample (mkStdGen 20) 5500 [(1,n) | n <- [1..50]]
