@@ -1,7 +1,7 @@
-module DecisionStump
+module AI.Supervised.DecisionStump
     where
 
-import Classification
+import AI.Classification
 
 import Data.List
 import Data.List.Extras

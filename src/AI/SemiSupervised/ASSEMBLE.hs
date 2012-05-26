@@ -1,12 +1,12 @@
-module ASSEMBLE
+module AI.SemiSupervised.ASSEMBLE
     where
 
 import Database.HDBC
 import Debug.Trace
 import System.Random
 
-import Classification
-import Ensemble
+import AI.Classification
+import AI.Ensemble
 
 -- training
 
@@ -60,6 +60,9 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
           wus'_unnorm = [ let l'=classify (Ensemble es') d in
                           (w*(exp $ -alpha * (indicator $ l'==f_itr d)),(l',d)) | (w,(l,d)) <- wus]
           wls'_unnorm = [ (w*(exp $ -alpha * (indicator $ l ==f_itr d)),(l, d)) | (w,(l,d)) <- wls]
+{-          wus'_unnorm = [ let l'=classify (Ensemble es') d in
+                          (-(exp $ -(indicator $ l')*(big_F d)),(l',d)) | (w,(l,d)) <- wus]
+          wls'_unnorm = [ (-(exp $ -(indicator $ l )*(big_F d)),(l, d)) | (w,(l,d)) <- wls]-}
        
           w_tot = sum [ w | (w,ld) <- wus'_unnorm]
                 + sum [ w | (w,ld) <- wls'_unnorm]
@@ -74,8 +77,7 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
           wdsnew = [ (w/wdsnew_total,dp) | (w,dp) <- wdsnew_unnorm ]-}
           
           -- memoization functions
-          test_data =  [dp | (w,dp) <- wls]++[dp | (w,dp) <- wus]
---           classifier_test = eval (f_itr) test_data
-          big_f = classify (Ensemble es')
+          big_F = weightedClassify $ Ensemble es'
+          big_f = classify $ Ensemble es'
           classifier_test = eval (big_f) [dp | (w,dp) <- wls++wus]
              

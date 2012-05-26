@@ -4,6 +4,9 @@ import NaiveBayes
 import AdaBoost
 import ASSEMBLE
 import Ensemble
+import SemiBoost
+import RegBoost
+import RegularizedBoost
 
 import Control.Monad
 import Control.Monad.Writer
@@ -24,9 +27,11 @@ loadData filename = do
     str <- hGetContents hin
     let ds = liftM (map (\dp -> (last dp, map cell2sql $ init dp))) $ parseCSV str
     return ds
-        where cell2sql x = case (reads x::[(Double,String)]) of
-                                [] -> toSql (x::String)
-                                xs -> toSql $ fst $ head xs
+        where 
+--               cell2sql x = toSql (read x::Double) 
+              cell2sql x = toSql $ case (reads x::[(Double,String)]) of
+                                        []     -> toSql (x::String)
+                                        (x:xs) -> toSql $ fst x
     
 -- CSV parser from "Real World Haskell," p. 391
     
@@ -47,8 +52,8 @@ quotedChar = noneOf "\"" <|> try (string "\"\"" >> return '"')
 
 eol =   try (string "\n\r")
     <|> try (string "\r\n")
-    <|> string "\n"
-    <|> string "\r"
+    <|> try (string "\n")
+    <|> try (string "\r")
     <?> "end of line"
     
 -- test functions
@@ -68,28 +73,27 @@ s2ss rgen factor (x:xs) (ls,us) = if r<factor
 
 --
 
+main=test
 test = do
 --     rgen <- newStdGen
-    let rgen = mkStdGen 200
-    dm <- loadData "testdata/german.data"
---     dm <- loadData "testdata/haberman.data"
+    let rgen = mkStdGen 202
+--     dm <- loadData "testdata/german.data"
+    dm <- loadData "testdata/haberman.data"
 --     dm <- loadData "testdata/ionosphere.data"
     let x=do
         ds <- dm
         let bds = toBinaryData "1" ds
-        let (ls,us) = s2ss rgen (0.1) bds ([],[])
+        let (ls,us) = s2ss rgen (0.2) bds ([],[])
         
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
         
---         let (ada,out) = (runWriter $ ASSEMBLE.train DecisionStump.train DecisionStump.classify ls us)
-        let (ada,out) = (runWriter $ ASSEMBLE.train NaiveBayes.train NaiveBayes.classify ls [])
+--         let (ada,out) = (runWriter $ SemiBoost.train DecisionStump.train DecisionStump.classify ls us)
+        let (ada,out) = (runWriter $ ASSEMBLE.train NaiveBayes.train NaiveBayes.classify ls us)
         let adac= Ensemble.classify ada
         
-        let dsc = DecisionStump.classify (DecisionStump.train bds)
         
---         return $ ([""],eval dsc bds)
         let evalres=eval adac bds
-        return $ trace ("length ls/us = "++(show $ length ls)++"/"++(show $ length us)) $ (out,evalres)
+        return $ (out,evalres)
     pExec x
 
 pExec :: (Show a) => Either b ([String],PerformanceDesc a) -> IO ()

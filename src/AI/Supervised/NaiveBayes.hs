@@ -1,4 +1,4 @@
-module NaiveBayes
+module AI.Supervised.NaiveBayes
     where
 
 import Data.List
@@ -7,7 +7,7 @@ import qualified Data.Map as Map
 import Database.HDBC
 import Debug.Trace
 
-import Classification
+import AI.Classification
 
 -- Data types
 
@@ -28,6 +28,7 @@ data NBayesDist = Gaussian !Double -- M
 -- Training
 
 train :: (Ord a) => [(a,[SqlValue])] -> NBayes a
+train [] = trace "empty train" $ error "foo"
 train xs = foldl' trainItr emptyBayes xs
     where emptyBayes = NBayes Map.empty $ replicate (length $ snd $ head xs) $ NBayesComponent $ Map.empty
 

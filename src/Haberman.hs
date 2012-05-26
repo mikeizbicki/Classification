@@ -2,6 +2,7 @@ import Classification
 import DecisionStump
 import NaiveBayes
 import AdaBoost
+import Ensemble
 
 import Control.Monad
 import Control.Monad.Writer
@@ -71,7 +72,7 @@ test = do
         
 --         let (ada,out) = (runWriter $ AdaBoost.train DecisionStump.train DecisionStump.classify bds)
         let (ada,out) = (runWriter $ AdaBoost.train NaiveBayes.train NaiveBayes.classify bds)
-        let adac= AdaBoost.classify ada
+        let adac= Ensemble.classify ada
         
         let dsc = DecisionStump.classify (DecisionStump.train bds)
         

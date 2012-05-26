@@ -12,12 +12,10 @@ import Ensemble
 
 {-
 
-This implementation of AdaBoost most closely follows the implementation in 
-http://www.deetc.isel.ipl.pt/sistemastele/docentes/AF/Textos/RT/SurveyBoosting.pdf
+MarginBoost is very similar to AdaBoost, but seems to converge a little faster?
 
-Unfortunately, this paper contains an error in the implementation.  In step 2.d
-of the pseudocode on page 5, the indicator function should contain an ==, not a /=.
-This was the source of a huge headache today.
+This implementation is based on Algorithm 12.4 in "Functional Gradient Techniques for Conbining Hypotheses"
+by Mason, Baxter, Bartlett, and Frean
 
 -}
 
@@ -39,22 +37,30 @@ trainItr itr trainer classifier wds (Ensemble adas) = do
        else trainItr (itr-1) trainer classifier wdsnew adanew
        
     where
+          -- parameters
+          cost  z =  exp(-z)
+          cost' z = -exp(-z)
+          
           -- important functions
           adanew = Ensemble $ (alpha,h):adas
           
           h = classifier $ trainer $ sample (mkStdGen itr) 300 wds
               
           err = (sum $ [ w * (indicator (l/=hl)) | (w,(l,d),hl) <- hL ])
-              / (sum $ [ w | (w,(l,d)) <- wds ])
+--               / (sum $ [ w | (w,(l,d)) <- wds ])
               
           alpha = 0.5 * (log $ (1-err)/err)
           
-          wdsnew_unnorm = [ (w*(exp $ (-alpha * (indicator (l==hl)))) ,(l,d)) 
+          wdsnew_unnorm = [ (cost' $ (bool2num l) * (big_H d),(l,d)) 
                           | (w,(l,d),hl) <- hL
                           ]
+{-          wdsnew_unnorm = [ (w*(exp $ (-alpha * (indicator (l==hl)))) ,(l,d)) 
+                          | (w,(l,d),hl) <- hL
+                          ]-}
           wdsnew_total = sum [ w | (w,dp) <- wdsnew_unnorm]
           wdsnew = [ (w/wdsnew_total,dp) | (w,dp) <- wdsnew_unnorm ]
                               
           -- memoization functions
-          classifier_test = eval (classify adanew) [dp | (w,dp) <- wds]
+          big_H = weightedClassify adanew
+          classifier_test = eval (num2bool . big_H) [dp | (w,dp) <- wds]
           hL = map (\(w,(l,d))->(w,(l,d),h d)) wds

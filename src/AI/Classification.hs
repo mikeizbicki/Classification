@@ -1,10 +1,11 @@
-module Classification 
+module AI.Classification 
     where
       
 import Control.Monad.Writer
 import Database.HDBC
 import System.Random
 import Data.List
+import Debug.Trace
 
 import qualified Data.Map as Map
 
@@ -26,6 +27,7 @@ type Trainer a b = [(a,DataPoint)] -> b
 type Classifier a b = b -> DataPoint -> a
 
 type BoolClassifier b = b -> [SqlValue] -> Bool
+
 
 -- Binary functions
 
@@ -79,17 +81,30 @@ logAI str = tell [str]
 
 -- Sampling from weighted lists
 
-sample :: (Show a) => StdGen -> Int -> [(Double,a)] -> [a]
+sample :: (Show a,Eq a) => StdGen -> Int -> [(Double,a)] -> [a]
 sample rgen n xs = sampleWalk 0 xs randL
-    where totalWeights = sum $ map fst xs
+    where 
+          totalWeights = sum $ map fst xs
           randL = sort $ randList rgen n (0,totalWeights)
 
 sampleWalk :: Double -> [(Double,a)] -> [Double] -> [a]
-sampleWalk tally [] _ = []
-sampleWalk tally _ [] = []
-sampleWalk tally xs ys = if ((fst $ head xs)+tally)>(head ys)
-                            then (snd $ head xs):(sampleWalk tally xs $ tail ys)
-                            else sampleWalk (tally+(fst $ head xs)) (tail xs) ys
+sampleWalk tally [] _  = []
+sampleWalk tally _  [] = []
+sampleWalk tally (x:xs) (y:ys) = 
+    if not sanity
+       then error "sample: One of the sampling weights is either NaN or Infinity."
+       else if ((fst x)+tally)>(y)
+               then (snd x):(sampleWalk tally (x:xs) $ ys)
+               else sampleWalk (tally+(fst x)) (xs) (y:ys)
+       
+    where sanity = (isNumber $ fst x) && (isNumber y)
+
+isNumber :: Double -> Bool
+isNumber x = if x/=x -- x is NaN
+                then False
+                else if x==x+1 -- x is +/- Infinity
+                        then False
+                        else True
 
 randList :: StdGen -> Int -> (Double,Double) -> [Double]
 randList rgen 0 interval = []
