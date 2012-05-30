@@ -24,7 +24,7 @@ This was the source of a huge headache today.
 train :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (Ensemble model)
 train trainer classifier ds = do
     logAI "AdaBoost.train"
-    trainItr 2000 trainer classifier wds (Ensemble [])
+    trainItr 20 trainer classifier wds (Ensemble [])
     where wds = map (\(l,d)->(w,(l,d))) ds
           w = 1/(fromIntegral $ length ds)
 

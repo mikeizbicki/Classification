@@ -1,12 +1,12 @@
-import Classification
-import DecisionStump
-import NaiveBayes
-import AdaBoost
-import ASSEMBLE
-import Ensemble
-import SemiBoost
-import RegBoost
-import RegularizedBoost
+import AI.Classification
+import AI.Ensemble
+
+import qualified AI.Supervised.DecisionStump as DecisionStump
+import qualified AI.Supervised.NaiveBayes as NaiveBayes
+import qualified AI.SemiSupervised.ASSEMBLE as ASSEMBLE
+import qualified AI.SemiSupervised.SemiBoost as SemiBoost
+import qualified AI.SemiSupervised.RegBoost as RegBoost
+import qualified AI.SemiSupervised.RegularizedBoost as RegularizedBoost
 
 import Control.Monad
 import Control.Monad.Writer
@@ -77,19 +77,19 @@ main=test
 test = do
 --     rgen <- newStdGen
     let rgen = mkStdGen 202
---     dm <- loadData "testdata/german.data"
-    dm <- loadData "testdata/haberman.data"
---     dm <- loadData "testdata/ionosphere.data"
+    dm <- loadData "../testdata/german.data"
+--     dm <- loadData "../testdata/haberman.data"
+--     dm <- loadData "../testdata/ionosphere.data"
     let x=do
         ds <- dm
         let bds = toBinaryData "1" ds
-        let (ls,us) = s2ss rgen (0.2) bds ([],[])
+        let (ls,us) = s2ss rgen (10.2) bds ([],[])
         
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
         
 --         let (ada,out) = (runWriter $ SemiBoost.train DecisionStump.train DecisionStump.classify ls us)
-        let (ada,out) = (runWriter $ ASSEMBLE.train NaiveBayes.train NaiveBayes.classify ls us)
-        let adac= Ensemble.classify ada
+        let (ada,out) = (runWriter $ ASSEMBLE.train NaiveBayes.train NaiveBayes.classify ls [])
+        let adac= classify ada
         
         
         let evalres=eval adac bds

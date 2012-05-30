@@ -1,8 +1,12 @@
-import Classification
-import DecisionStump
-import NaiveBayes
-import AdaBoost
-import Ensemble
+import AI.Classification
+import AI.Ensemble
+
+import qualified AI.Supervised.DecisionStump as DecisionStump
+import qualified AI.Supervised.NaiveBayes as NaiveBayes
+import qualified AI.Supervised.AlwaysTrue as AlwaysTrue
+
+import qualified AI.Supervised.AdaBoost as AdaBoost
+import qualified AI.Supervised.MarginBoost as MarginBoost
 
 import Control.Monad
 import Control.Monad.Writer
@@ -58,11 +62,11 @@ kFolds k xs = kFoldsItr 0 xs
               where n = ceiling $ (fromIntegral $ length xs) / (fromIntegral k)
 
 
-
+main=test
 test = do
-    dm <- loadData "testdata/german.data"
---     dm <- loadData "testdata/haberman.data"
---     dm <- loadData "testdata/ionosphere.data"
+    dm <- loadData "../testdata/german.data"
+--     dm <- loadData "../testdata/haberman.data"
+--     dm <- loadData "../testdata/ionosphere.data"
     let x=do
         ds <- dm
         let bds = toBinaryData "1" ds
@@ -70,9 +74,9 @@ test = do
         
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
         
---         let (ada,out) = (runWriter $ AdaBoost.train DecisionStump.train DecisionStump.classify bds)
-        let (ada,out) = (runWriter $ AdaBoost.train NaiveBayes.train NaiveBayes.classify bds)
-        let adac= Ensemble.classify ada
+--         let (ada,out) = (runWriter $ MarginBoost.trainArr DecisionStump.train DecisionStump.classify bds)
+        let (ada,out) = (runWriter $ MarginBoost.trainArr NaiveBayes.train NaiveBayes.classify bds)
+        let adac=classify ada
         
         let dsc = DecisionStump.classify (DecisionStump.train bds)
         
@@ -83,4 +87,4 @@ test = do
 pExec :: (Show a) => Either b ([String],PerformanceDesc a) -> IO ()
 pExec (Right (xs,pd)) = do
     putStrLn $ concat $ map (\x -> "\n"++x) xs
-    putStrLn $ "result="++show pd
+    putStrLn $ "result="++show pd++" --  "++(show $ errorRate pd)

@@ -1,6 +1,7 @@
-import AdaBoost
-import NaiveBayes
-import Classification
+import AI.Classification
+
+import AI.Supervised.AdaBoost as AdaBoost
+import AI.Supervised.NaiveBayes as NaiveBayes
 
 import Criterion.Config
 import Criterion.Main
