@@ -64,8 +64,8 @@ kFolds k xs = kFoldsItr 0 xs
 
 main=test
 test = do
-    dm <- loadData "../testdata/german.data"
---     dm <- loadData "../testdata/haberman.data"
+--     dm <- loadData "../testdata/german.data"
+    dm <- loadData "../testdata/haberman.data"
 --     dm <- loadData "../testdata/ionosphere.data"
     let x=do
         ds <- dm
@@ -74,8 +74,8 @@ test = do
         
         let bnbc = NaiveBayes.classify (NaiveBayes.train bds)
         
---         let (ada,out) = (runWriter $ MarginBoost.trainArr DecisionStump.train DecisionStump.classify bds)
-        let (ada,out) = (runWriter $ MarginBoost.trainArr NaiveBayes.train NaiveBayes.classify bds)
+--         let (ada,out) = (runWriter $ MarginBoost.train DecisionStump.train DecisionStump.classify bds)
+        let (ada,out) = (runWriter $ MarginBoost.train NaiveBayes.train NaiveBayes.classify bds)
         let adac=classify ada
         
         let dsc = DecisionStump.classify (DecisionStump.train bds)
