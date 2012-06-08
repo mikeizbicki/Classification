@@ -19,7 +19,7 @@ This implementation is based on the original SemiBoost paper, "SemiBoost: Boosti
 train :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> [DataPoint] -> LogAI (Ensemble model)
 train trainer classifier ls us = do
     logAI "SemiBoost.train"
-    trainItr 20 trainer classifier wls wus (Ensemble [])
+    trainItr 10 trainer classifier wls wus (Ensemble [])
     where beta = 0.9
           wl = beta/(fromIntegral $ (length ls))
           wu = (1-beta)/(fromIntegral $ (length us))
@@ -44,7 +44,8 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
        
     where 
           -- parameters
-          c=1
+--           c=1
+          c=(fromIntegral $ length wls)/(fromIntegral $ length wus)
           
           -- memoization functions
           big_H::DataPoint -> Double
@@ -58,23 +59,27 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
                     
           pl=[sum [ (indicator       l2)*(similarity d1 d2) * (exp $ -2*(_H1)) | (w2,(l2,d2),h2,_H2) <- wlsH] | (w1,(l1,d1),h1,_H1) <- wlsH]
           ql=[sum [ (indicator $ not l2)*(similarity d1 d2) * (exp $  2*(_H1)) | (w2,(l2,d2),h2,_H2) <- wlsH] | (w1,(l1,d1),h1,_H1) <- wlsH]
-          qu=[c/2*sum [ (similarity d1 d2) * (exp $ (_H2)-(_H1)) | (w2,(l2,d2),h2,_H2) <- wusH] | (w1,(l1,d1),h1,_H1) <- wusH]
+--           pu=[c/2*sum [ (similarity d1 d2) * (exp $ (_H2)-(_H1)) | (w2,(l2,d2),h2,_H2) <- wusH] | (w1,(l1,d1),h1,_H1) <- wusH]
+--           qu=[c/2*sum [ (similarity d1 d2) * (exp $ (_H1)-(_H2)) | (w2,(l2,d2),h2,_H2) <- wusH] | (w1,(l1,d1),h1,_H1) <- wusH]
           pu=[c/2*sum [ (similarity d1 d2) * (exp $ (_H1)-(_H2)) | (w2,(l2,d2),h2,_H2) <- wusH] | (w1,(l1,d1),h1,_H1) <- wusH]
+          qu=[c/2*sum [ (similarity d1 d2) * (exp $ (_H2)-(_H1)) | (w2,(l2,d2),h2,_H2) <- wusH] | (w1,(l1,d1),h1,_H1) <- wusH]
           
           pqwls=zip (zip pl ql) wls
           pqwus=zip (zip pu qu) wus
+
+          wls' = {-trace (show wls'')-} wls''
+          wls'' = [(0.00001+(abs $ p-q),(             l,d)) | ((p,q),(w,(l,d))) <- pqwls]
+          wus' = [(0.00001+(abs $ p-q),(num2bool $ p-q,d)) | ((p,q),(w,(l,d))) <- pqwus]
           
-          wls' = [(abs $ p-q,(             l,d)) | ((p,q),(w,(l,d))) <- pqwls]
-          wus' = [(abs $ p-q,(num2bool $ p-q,d)) | ((p,q),(w,(l,d))) <- pqwus]
-          
---           model = trainer $ sample (mkStdGen itr) 300 (wls'++wus')
-          model = trainer $ sample (mkStdGen itr) 300 (wls++wus)
+--           model = trainer $ sample (mkStdGen itr) 5000 (wls'++wus')
+          model = trainer $ sample (mkStdGen itr) 1000 (wls++wus)
           h_itr = classifier model
           
           alpha = (1/4) * (log $ ((sum [p*(indicator $ h_itr d==True ) | ((p,q),(w,(l,d)))<-pqwls])
                                  +(sum [q*(indicator $ h_itr d==False) | ((p,q),(w,(l,d)))<-pqwls])) 
                                / ((sum [p*(indicator $ h_itr d==False) | ((p,q),(w,(l,d)))<-pqwls])
-                                 +(sum [q*(indicator $ h_itr d==True ) | ((p,q),(w,(l,d)))<-pqwls]))
+                                 +(sum [q*(indicator $ h_itr d==True ) | ((p,q),(w,(l,d)))<-pqwls])
+                                 )
                                )
           
-          es' = (alpha,h_itr):es
+          es' = (alpha,model,classifier):es

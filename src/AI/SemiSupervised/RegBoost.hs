@@ -79,4 +79,4 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
           
           -- step 2.3
           model = trainer $ sample (mkStdGen itr) 300 (wls++wus)
-          es' = (step,classifier model):es
+          es' = (step,model,classifier):es

@@ -1,5 +1,7 @@
 module Main where
 
+import AI.DataLoader
+
 import Control.Monad
 import Data.List
 import Data.Monoid
@@ -7,9 +9,12 @@ import System.Directory
 import System.IO
 import Text.ParserCombinators.Parsec
 
+import qualified Data.Map as Map
+
 import qualified Graphics.Gnuplot.Advanced as Plot
 import qualified Graphics.Gnuplot.Terminal.X11 as X11
 import qualified Graphics.Gnuplot.Terminal.PNG as PNG
+import qualified Graphics.Gnuplot.Terminal.SVG as SVG
 
 import qualified Graphics.Gnuplot.MultiPlot as MultiPlot
 
@@ -25,37 +30,38 @@ import qualified Graphics.Gnuplot.Graph.TwoDimensional as Graph2D
 import Graphics.Gnuplot.Plot.TwoDimensional (linearScale, )
 
 import qualified Graphics.Gnuplot.LineSpecification as LineSpec
-
--- importing data functions
-
--- loadResults :: String -> IO (Either ParseError ResultsData)
-loadResults plottingFunc filename = do
-    hin <- openFile filename ReadMode
-    str <- hGetContents hin
-    let ds = liftM plottingFunc $ parseCSV str
-    return ds
+import qualified Graphics.Gnuplot.ColorSpecification as Color
     
 -- csv2boostErr :: [[String]] -> [Double]
-csv2boostErr xs = 
-    [ ("", 1, matmap (quantile 0.1) $ doubledata xs)
-    , ("", 2, matmap mean           $ doubledata xs)
-    , ("", 1, matmap (quantile 0.9) $ doubledata xs)
+csv2boostErr title xs = 
+    [ ("",     1, matmap (quantile 0.1) $ doubledata xs)
+    , (title', 2, matmap mean           $ doubledata xs)
+    , ("",     1, matmap (quantile 0.9) $ doubledata xs)
     ]
+    where 
+        title' = 
+            last $
+            words $
+            map (\x -> if x=='/'
+                          then ' '
+                          else x)
+                title
     
 -- csv2boostHist :: [[String]] -> [Double]
-csv2boostHist xs = 
+csv2boostHist title xs = 
     [ ("", 1, matmap (quantile 0.1) $ doubledata xs)
     , ("", 2, matmap mean           $ doubledata xs)
     , ("", 1, matmap (quantile 0.9) $ doubledata xs)
     ]
 
-csv2boostHist' xs = 
-    [ ("", 1, matmap (quantile 0.1) $ doubledata xs)
-    , ("", 2, matmap mean           $ doubledata xs)
-    , ("", 1, matmap (quantile 0.9) $ doubledata xs)
-    ]
-
-test = loadResults csv2boostHist' "/home/user/proj/haskell-classification/results/german.data-AdaBoost-0.1.csv"
+csv2boostHist' title xs = 
+--     last2nd $ head $ doubledata xs
+    histogram $ map (\x-> floor $ x*100) $ map (\ys -> (last2nd ys)-(head ys)) $ doubledata xs
+    where 
+        last2nd ys = head $ tail $ reverse ys
+        
+histogram :: Ord a => [a] -> Map.Map a Int
+histogram xs = Map.fromList [ (head l, length l) | l <- group (sort xs) ]
 
 matmap :: ([a]->b) -> [[a]] -> [b]
 matmap f xs = reverse $ matmap' f xs
@@ -98,31 +104,6 @@ quantileAsc q xs
                                idx | idx < 0    -> error "Quantile index too small"
                                    | idx >= len -> error "Quantile index too large"
                                    | otherwise  -> idx
-    
--- CSV parser from "Real World Haskell," p. 391
-    
-parseCSV :: String -> Either ParseError [[String]]
-parseCSV input = parse csvFile "(unknown--parseResults)" input
-    
-csvFile = endBy line eol
-line = sepBy cell (char ',' <|> char ' ')
-cell = do
-    spaces
-    quotedCell <|> many (noneOf " ,\n\r")
-
-quotedCell = do
-    char '"'
-    content <- many quotedChar
-    char '"' <?> "Quote at end of cell"
-    return content
-    
-quotedChar = noneOf "\"" <|> try (string "\"\"" >> return '"')
-
-eol =   try (string "\n\r")
-    <|> try (string "\r\n")
-    <|> try (string "\n")
-    <|> try (string "\r")
-    <?> "end of line"
 
 -- types of plots
 
@@ -134,14 +115,30 @@ boostErr xs =
         Opts.yLabel "Error" $
         Opts.deflt) $
     mconcat $
+    mkErrLines Color.red xs
+          
+-- mkErrLines :: Color.T -> [(String,Double,[a])] -> [Plot2D.T (Graph2D.T Int Double)]
+mkErrLines color xs =
     map (\(title,width,dat) ->
         fmap (Graph2D.lineSpec (
             LineSpec.title title $ 
             LineSpec.lineWidth width $
+            LineSpec.lineColor color $
             LineSpec.deflt
             )) $
         Plot2D.list Graph2D.listLines dat) $ xs
-          
+        
+-- boostErrComp :: [[(Color.T,(String,Double,[Double]))]] -> Frame.T (Graph2D.T Int Double)
+boostErrComp xs =
+    Frame.cons (
+        Opts.title "Boosting Error Progression" $
+        Opts.xLabel "Number of boosting iterations" $
+        Opts.yLabel "Error" $
+        Opts.deflt) $
+    mconcat $ concat 
+    [ [head $ tail $ mkErrLines color ys] | (color,ys) <- xs ]
+        
+        
 boostHist :: [(String,Double,[Double])] -> Frame.T (Graph2D.T Int Double)
 boostHist xs =
     Frame.cons (
@@ -160,13 +157,15 @@ boostHist xs =
 
 -- plotting IO
           
+loadResults plottingFunc filename = liftM (liftM $ plottingFunc filename) $ loadCSV filename
+
 plotFile file = do
     putStrLn $ "Plotting results for: "++file
     eitherBoostErr <- loadResults csv2boostErr file
     eitherBoostHist <- loadResults csv2boostHist file
     sequence_
-        [ Plot.plot (PNG.cons $ file++".boostErr.png") $ boostErr $ right eitherBoostErr
-        , Plot.plot (PNG.cons $ file++".boostHist.png") $ boostHist $ right eitherBoostHist
+        [ Plot.plot (SVG.cons $ file++".boostErr.svg") $ boostErr $ right eitherBoostErr
+        , Plot.plot (SVG.cons $ file++".boostHist.svg") $ boostHist $ right eitherBoostHist
         ]    
 {-    liftM sequence_ $ do
         ds <- eitherdata
@@ -175,10 +174,21 @@ plotFile file = do
             ]-}
 right (Right xs) = xs
           
+algCompare fs = do
+    putStrLn $ "Plotting comparison for: "++(show fs)
+    eitherBoostErr <- sequence [loadResults csv2boostErr f | f<-fs]
+    sequence_
+        [ Plot.plot (SVG.cons $ "../results/comp."++{-(show fs)++-}".boostErr.svg") $ boostErrComp $ 
+            zip [ Color.red, Color.green, Color.blue, Color.black ]
+                [ right ebe | ebe <- eitherBoostErr ]
+        ]
+        
+        
 plotAllFiles tmpdir resdir = do
     setCurrentDirectory tmpdir
     files <- getDirectoryContents resdir
-    let resfiles = map (resdir++) $ filter (isInfixOf ".csv") files
+    let resfiles = map (resdir++) $ filter (\str-> isInfixOf ".csv" str && (not $ isInfixOf ".png" str) && (not $ isInfixOf ".svg" str)) files
+    algCompare resfiles
     sequence_ $ map plotFile $ resfiles
 
 -- main

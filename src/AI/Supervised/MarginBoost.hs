@@ -29,24 +29,20 @@ data MBParams model =
              , sampleRate :: Int
              }
 
-data TrainingVec = TrainingVec { weights :: V.Vector Double
-                               , labels :: V.Vector Bool
-                               , dataPoints :: V.Vector DataPoint
-                               }
-
-trainArr :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (Ensemble model)
-trainArr t c ds = 
-    supertrainArr MBParams { iterations = 20 
+train :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (Ensemble model)
+train t c ds = 
+    supertrainArr MBParams { iterations = 50 
                            , classifier = c
                            , trainer = t
-                           , sampleRate = 5000
+                           , sampleRate = 1000
                            }
                   TrainingVec { weights = V.empty
                               , labels = V.fromList [ l | (l,d) <- ds ]
                               , dataPoints = V.fromList [ d | (l,d) <- ds ]
+                              , numLabels = length ds
                               }
 
-supertrainArr :: MBParams model -> TrainingVec -> LogAI (Ensemble model)
+supertrainArr :: MBParams model -> TrainingVec Bool -> LogAI (Ensemble model)
 supertrainArr param td = do
     logAI "MarginBoost.train"
     trainItrArr param 0 td' (Ensemble [])
@@ -54,27 +50,28 @@ supertrainArr param td = do
               len = V.length $ labels td
               val = 1/(fromIntegral $ V.length $ dataPoints td) :: Double
         
-trainItrArr :: MBParams model -> Int -> TrainingVec -> Ensemble model -> LogAI (Ensemble model)
+trainItrArr :: MBParams model -> Int -> TrainingVec Bool -> Ensemble model -> LogAI (Ensemble model)
 trainItrArr param itr td (Ensemble es) = do
     logAI $ "MarginBoost.trainItr: " ++ (show itr)
           ++ "  --  "++(show $ classifier_test)
           ++ "  --  "++(show stopIndex)
+          ++ "  --  "++(show w)
           ++ "  --  "++(show $ errorRate classifier_test)
-    if stopCondition || itr>iterations param
+    if {-stopCondition || -}itr>=iterations param
        then return $ Ensemble es
        else trainItrArr param (itr+1) td' (Ensemble es')
     
     where 
-          -- params
---           cost  z =  exp(-z)
---           cost' z = -exp(-z)
+          -- parameters
+          cost  z =  exp(-z)
+          cost' z = -exp(-z)
 --           cost  z =  log $ 1 + (exp $ -2*z) -- LogitBoost
 --           cost' z = (-2 * (exp $ -2*z)) / (1+(exp $ -2*z))
-          cost  z = (1 - z)^2
-          cost' z = -2*(1-z)
+--           cost  z = (1 - z)^2
+--           cost' z = -2*(1-z)
           
           
-          es' = (w,f):es
+          es' = (w,model,classifier param):es
           td' = td  { weights = weights' }
           
           -- memoization
@@ -88,17 +85,19 @@ trainItrArr param itr td (Ensemble es) = do
           _f_vec = V.fromList [f $ _x i | i<-indexL]
 
           -- algorithm
-          w=1/(1+fromIntegral itr)
---           w = (1/2) * (log $ (sum [ (_D i)*(indicator $ _y i==(_f i)) | i<-indexL])
---                            / (sum [ (_D i)*(indicator $ _y i/=(_f i)) | i<-indexL]))
+--           w=1/(1+fromIntegral itr)
+          w = (1/2) * (log $ (sum [ (_D i)*(indicator $ _y i==(_f i)) | i<-indexL])
+                           / (sum [ (_D i)*(indicator $ _y i/=(_f i)) | i<-indexL] + 0.00001))
 
           wds = zip (V.toList $ weights td) (zip (V.toList $ labels td) (V.toList $ dataPoints td))
-          f = (classifier param) $ (trainer param) $ sample (mkStdGen itr) (sampleRate param) wds
+          f = (classifier param) $ model
+          model = {-trace (show sampledist) $ -}(trainer param) sampledist
+          sampledist = sample (mkStdGen itr) (sampleRate param) wds
           
           _F = weightedClassify $ Ensemble es'
           classifier_test = eval (num2bool . _F) [ (_y i,_x i) | i <- indexL]
 
-          weights'_unnorm = V.fromList [ cost' $ (bool2num $ _y i)*(_F $ _x i)| i<-indexL]
+          weights'_unnorm = V.fromList [ cost' $ (bool2num $ _y i)*(_F $ _x i) | i<-indexL]
           weights'_tot = V.sum weights'_unnorm
           weights' = V.map (\x -> x/weights'_tot) weights'_unnorm
 
@@ -109,10 +108,10 @@ trainItrArr param itr td (Ensemble es) = do
 
 -- train :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> LogAI (Ensemble model)
 -- train t c = 
---     supertrain $ MBParams { iterations = 20 
+--     supertrain $ MBParams { iterations = 50 
 --                           , classifier = c
 --                           , trainer = t
---                           , sampleRate = 5000
+--                           , sampleRate = 1000
 --                           }
 -- 
 -- supertrain :: MBParams model -> [(Bool,DataPoint)] -> LogAI (Ensemble model)
@@ -141,9 +140,11 @@ trainItrArr param itr td (Ensemble es) = do
 --                            / (sum [ w*(indicator $ l/=fd) | (w,(l,d),fd) <- wdsf]))
 -- 
 --           -- algorithm
---           f = (classifier param) $ (trainer param) $ sample (mkStdGen itr) (sampleRate param) wds
+--           f = (classifier param) model
+--           model = (trainer param) $ sample (mkStdGen itr) (sampleRate param) wds
 --           
---           es' = (w,f):es
+-- --           es' = (w,f):es
+--           es' = (w,model,classifier param):es
 --           _F = weightedClassify $ Ensemble es'
 --           classifier_test = eval (num2bool . _F) [ld | (w,ld) <- wds]
 --           
@@ -156,4 +157,4 @@ trainItrArr param itr td (Ensemble es) = do
 -- 
 --           -- memoization functions
 --           wdsf = [ (w,(l,d),f d) | (w,(l,d)) <- wds ]
-
+-- 

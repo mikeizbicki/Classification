@@ -61,25 +61,25 @@ overlay2d =
 
 histogram2d :: Frame.T (Graph2D.T Int Double)
 histogram2d =
-   Frame.cons (
-      Opts.title "Comparison of how well software revisions perform on each hardware version" $
-      Histogram.clusteredGap 2 $
-      Opts.boxwidthAbsolute 0.9 $
-      OptsStyle.fillBorderLineType (-1) $
-      OptsStyle.fillSolid $
-      Opts.xTicks2d
-         [("220", 0), ("320", 1), ("420", 2), ("520", 3), ("620", 4), ("720", 5)] $
-      Opts.yRange2d (0,3000) $
-      Opts.deflt) $
-   mconcat $
-   map (\(title,dat) ->
-      fmap (Graph2D.lineSpec (LineSpec.title title LineSpec.deflt)) $
-      Plot2D.list Graph2D.histograms dat) $
-   ("1.0011", [102, 213, 378, 408, 840,  920]) :
-   ("1.0012", [152, 233, 388, 433, 850, 1200]) :
+    Frame.cons (
+        Opts.title "Comparison of how well software revisions perform on each hardware version" $
+--       Histogram.clusteredGap 2 $
+--       Opts.boxwidthRelative 5 $
+        OptsStyle.fillBorderLineType (-1) $
+        OptsStyle.fillSolid $
+        Histogram.clustered $
+--       Opts.xTicks2d [("220", 0), ("320", 1), ("420", 2), ("520", 3), ("620", 4), ("720", 5)] $
+--       Opts.yRange2d (0,3000) $
+        Opts.deflt) $
+    mconcat $
+    map (\(title,dat) ->
+        fmap (Graph2D.lineSpec (LineSpec.title title LineSpec.deflt)) $
+        Plot2D.list Graph2D.histograms dat) $
+            ("1.0011", [102, 213, 378, 408, 840,  200, 102, 213, 378, 408, 840,  920]) :
+{-   ("1.0012", [152, 233, 388, 433, 850, 1200]) :
    ("1.0013", [172, 263, 408, 463, 860, 1500]) :
-   ("1.0014", [192, 293, 458, 483, 890, 2000]) :
-   []
+   ("1.0014", [192, 293, 458, 483, 890, 2000]) :-}
+            []
 
 names2d ::
    Frame.T (Graph2D.T Double Double)
@@ -182,16 +182,16 @@ multiplot =
 
 main :: IO ()
 main = sequence_ $
-{-   Plot.plot X11.cons simple2d :
-   Plot.plot X11.cons list2d :
-   Plot.plot X11.cons candle2d :-}
+--    Plot.plot X11.cons simple2d :
+--    Plot.plot X11.cons list2d :
+--    Plot.plot X11.cons candle2d :
    Plot.plot X11.cons histogram2d :
-{-   Plot.plot X11.cons names2d :
-   Plot.plot X11.cons overlay2d :
-   (Plot.plot X11.cons . flip file2d "runtime.data"
-      =<< fmap (</> "data") Path.getDataDir) :
-   Plot.plot X11.cons mixed2d :
-   Plot.plot X11.cons size2d :
-   Plot.plot X11.cons wave3d :
-   Plot.plot X11.cons multiplot :-}
+--    Plot.plot X11.cons names2d :
+--    Plot.plot X11.cons overlay2d :
+-- {-   (Plot.plot X11.cons . flip file2d "runtime.data"
+--       =<< fmap (</> "data") Path.getDataDir) :-}
+--    Plot.plot X11.cons mixed2d :
+--    Plot.plot X11.cons size2d :
+--    Plot.plot X11.cons wave3d :
+--    Plot.plot X11.cons multiplot :
    []

@@ -28,7 +28,7 @@ data NBayesDist = Gaussian !Double -- M
 -- Training
 
 train :: (Ord a) => [(a,[SqlValue])] -> NBayes a
-train [] = trace "empty train" $ error "foo"
+train [] = error "NaiveBayes.train: empty training set"
 train xs = foldl' trainItr emptyBayes xs
     where emptyBayes = NBayes Map.empty $ replicate (length $ snd $ head xs) $ NBayesComponent $ Map.empty
 
@@ -79,7 +79,7 @@ probDist label sql (PDF x) = labelMod / (fromIntegral totalCount)
     where totalCount = Map.fold (+) 0 x
           labelCount = Map.findWithDefault 0 (fromSql sql) x
           labelMod   = if labelCount==0
-                          then 0.00000000000000000000001
+                          then 0.000001
                           else fromIntegral labelCount
 probDist label sql (Gaussian m s k) = 1/(sqrt $ 2*pi*var) * (exp $ -(x-m)^2/(2*var))
     where x   = fromSql sql

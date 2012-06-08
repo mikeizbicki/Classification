@@ -121,16 +121,16 @@ probList dt sample = case attr of
 
 -- test
 
-sqldata = [(True,[toSql (3::Double),toSql "(1::Int)"])
-          ,(True,[toSql (2::Double),toSql "(1::Int)"])
+sqldata = [(True,[toSql (1::Double),toSql "(1::Int)"])
           ,(True,[toSql (1::Double),toSql "(1::Int)"])
-          ,(False,[toSql (1::Double),toSql "(2::Int)"])
-          ,(False,[toSql (2::Double),toSql "(1::Int)"])
-          ,(False,[toSql (1::Double),toSql "(2::Int)"])
+          ,(True,[toSql (1::Double),toSql "(1::Int)"])
+          ,(True,[toSql (2::Double),toSql "(2::Int)"])
+          ,(True,[toSql (2::Double),toSql "(2::Int)"])
+          ,(True,[toSql (2::Double),toSql "(2::Int)"])
           ]
           
 t=train sqldata
-sample = [toSql (1.9::Double),toSql "(1::Int)"]
+example = [toSql (2::Double),toSql "(1::Int)"]
 {-          
 sqldata = [(True,[toSql (1::Int),toSql (2::Int)])
           ,(True,[toSql (1::Int),toSql (1::Int)])

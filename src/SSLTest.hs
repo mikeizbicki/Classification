@@ -1,4 +1,5 @@
 import AI.Classification
+import AI.DataLoader
 import AI.Ensemble
 
 import qualified AI.Supervised.DecisionStump as DecisionStump
@@ -19,65 +20,17 @@ import Database.HDBC
 import Debug.Trace
 import System.IO
 import System.Random
-import Text.ParserCombinators.Parsec
    
 import qualified Data.Map as Map
 import qualified Data.Set as S
--- IO functions
-
-loadData :: String -> IO (Either ParseError TrainingData)
-loadData filename = do
-    hin <- openFile filename ReadMode
-    str <- hGetContents hin
-    let ds = liftM (map (\dp -> (last dp, map cell2sql $ init dp))) $ parseCSV str
-    return ds
-        where 
---               cell2sql x = toSql (read x::Double) 
-              cell2sql x = toSql $ case (reads x::[(Double,String)]) of
-                                        []     -> toSql (x::String)
-                                        (x:xs) -> toSql $ fst x
-    
--- CSV parser from "Real World Haskell," p. 391
-    
-parseCSV :: String -> Either ParseError [[String]]
-parseCSV input = parse csvFile "(unknown)" input
-    
-csvFile = endBy line eol
-line = sepBy cell (char ',' <|> char ' ')
-cell = do
-    spaces
-    quotedCell <|> many (noneOf " ,\n\r")
-
-quotedCell = do
-    char '"'
-    content <- many quotedChar
-    char '"' <?> "Quote at end of cell"
-    return content
-    
-quotedChar = noneOf "\"" <|> try (string "\"\"" >> return '"')
-
-eol =   try (string "\n\r")
-    <|> try (string "\r\n")
-    <|> try (string "\n")
-    <|> try (string "\r")
-    <?> "end of line"
-   
--- test csv parsing
-
-csv_test = do
-    dm <- loadData "../testdata/ringnorm.data"
-    putStrLn $ func dm
-    where
-          func (Left x) = show x
-          func (Right x) = show $ take 10 x
           
 -- test functions
-kFolds :: Int -> [a] -> [[a]]
-kFolds k xs = kFoldsItr 0 xs
-    where
-          kFoldsItr itr []   = []
-          kFoldsItr itr rest = {-trace (show itr ++ "-" ++ show n) $-} [take n rest]++(kFoldsItr (itr+1) (drop n rest))
-              where n = ceiling $ (fromIntegral $ length xs) / (fromIntegral k)
+-- kFolds :: Int -> [a] -> [[a]]
+-- kFolds k xs = kFoldsItr 0 xs
+--     where
+--           kFoldsItr itr []   = []
+--           kFoldsItr itr rest = {-trace (show itr ++ "-" ++ show n) $-} [take n rest]++(kFoldsItr (itr+1) (drop n rest))
+--               where n = ceiling $ (fromIntegral $ length xs) / (fromIntegral k)
 
 {-randSplit:: StdGen -> Double -> [a] -> ([a],[a]) -> ([a],[a])
 randSplit rgen factor []     (ls,us) = (ls,us)
@@ -121,38 +74,51 @@ test = do
                  let outfile = "../results/"++(fst testdatafile)++"-"++(fst alg)++"-"++(show factor)++{-"-"++(show seed)++-}".csv"
                  hout <- openFile outfile AppendMode
                  dm <- loadData $ "../testdata/"++(fst testdatafile)
-                 printTest hout $ do
+                 seq dm $ printTest hout $ do
                     ds <- dm
                     let bds = toBinaryData (snd testdatafile) ds
                     return $  performTest seed alg factor bds
                  hClose hout
                  
-            | alg <- [ {-("SemiMarginBoost",SemiMarginBoost.train)
-                     , -}("ASSEMBLE",ASSEMBLE.train)
---                      , ("SemiBoost",SemiBoost.train)
-                     , ("AdaBoost",sup2semi AdaBoost.train)
---                      , ("MarginBoost",sup2semi MarginBoost.train)
-                     ]
-            , factor <- [ 0.2
-                        , 0.1
-                        , 0.05
-                        ]
-            , seed <- [1..500]
-            , testdatafile <- [ ("haberman.data","1")
-                              , ("german.data","1")
---                               , ("twonorm.data","1")
---                               , ("ionosphere.data","g")
-                              ]
+            | alg <- 
+                ("RegularizedBoost-NB",RegularizedBoost.train NaiveBayes.train NaiveBayes.classify) :
+                ("SemiMarginBoost-NB",SemiMarginBoost.train NaiveBayes.train NaiveBayes.classify) :
+                ("ASSEMBLE-NB",ASSEMBLE.train NaiveBayes.train NaiveBayes.classify):
+--                 ("SemiBoost-NB",SemiBoost.train NaiveBayes.train NaiveBayes.classify):
+--                 ("AdaBoost-NB",sup2semi AdaBoost.train NaiveBayes.train NaiveBayes.classify):
+                ("MarginBoost-NB",sup2semi MarginBoost.train NaiveBayes.train NaiveBayes.classify):
+                
+--                 ("RegularizedBoost-DS",RegularizedBoost.train DecisionStump.train DecisionStump.classify) :
+--                 ("SemiMarginBoost-DS",SemiMarginBoost.train DecisionStump.train DecisionStump.classify) :
+--                 ("MarginBoost-DS",sup2semi MarginBoost.train DecisionStump.train DecisionStump.classify):
+--                 ("ASSEMBLE-DS",ASSEMBLE.train DecisionStump.train DecisionStump.classify):
+--                 ("SemiBoost-DS",SemiBoost.train DecisionStump.train DecisionStump.classify):
+--                 ("AdaBoost-DS",sup2semi AdaBoost.train DecisionStump.train DecisionStump.classify):
+                []
+--             , factor <- [ 0.2, 0.1, 0.05 ]
+            , factor <- [ 0.002 ]
+--             , seed <- [1..10]
+            , seed <- [1..20]
+            , testdatafile <- 
+--                 ("kr-vs-kp.data","won"):
+--                 ("tic-tac-toe.data","positive"):
+--                 ("haberman.data","1") :
+--                 ("optdigits.data","2") :
+--                 ("german.data","1") :
+                ("ringnorm.data","1") :
+--                 ("twonorm.data","1") :
+--                 ("ionosphere.data","g"):
+                []
             ]
     sequence x
 
-performTest :: Int -> (String,SSTrainer (NaiveBayes.NBayes Bool)) -> Double -> [(Bool,DataPoint)] -> (String,String)
+-- performTest :: Int -> (String,SSTrainer (NaiveBayes.NBayes Bool)) -> Double -> [(Bool,DataPoint)] -> (String,String)
 performTest seed (strTrainer,trainer) factor bds = (out,res)
     where
           rgen = mkStdGen seed
-          res = strTrainer++","++(show seed)++","++(show factor)++","++(list2csv $ perfTrace ens train_data)
+          res = strTrainer++","++(show seed)++","++(show factor)++","++(list2csv $ perfTrace ens test_data)
           out = concat $ map (\x -> "\n"++x) aitrace
-          (ens,aitrace) = (runWriter $ trainer NaiveBayes.train NaiveBayes.classify ls us)
+          (ens,aitrace) = (runWriter $ trainer ls (take 1000 us))
           (train_data,test_data) = randSplit rgen (0.8) bds
           (ls,us) = s2ss rgen (factor) train_data
 

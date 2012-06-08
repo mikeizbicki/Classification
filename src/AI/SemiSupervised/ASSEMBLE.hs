@@ -20,7 +20,7 @@ in Ensemble Methods," Algorithm 3.1
 train :: Trainer Bool model -> BoolClassifier model -> [(Bool,DataPoint)] -> [DataPoint] -> LogAI (Ensemble model)
 train trainer classifier ls us = do
     logAI "ASSEMBLE.train"
-    trainItr 20 trainer classifier wls wus (Ensemble [])
+    trainItr 50 trainer classifier wls wus (Ensemble [])
     where beta = 0.9
           wl = beta/(fromIntegral $ (length ls))
           wu = (1-beta)/(fromIntegral $ (length us))
@@ -39,21 +39,23 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
           ++ "  --  "++(show $ classifier_test)
           ++ "  --  "++(show err)
           ++ "  --  "++(show $ errorRate classifier_test)
-    if itr==0
+    if {-stopCondition ||-} itr==0
        then return $ Ensemble es
        else trainItr (itr-1) trainer classifier wls' wus' (Ensemble es')
        
     where 
-          model = trainer $ sample (mkStdGen itr) 1000 (wls++wus)
+--           model = trainer $ sample (mkStdGen itr) 300 (wls++wus)
+          model = trainer $ sample (mkStdGen itr) 1000 (wls)
           f_itr = classifier model
           
           err = err_l+err_u
           err_l = sum [ w*(indicator $ l/=f_itr d) | (w,(l,d)) <- wls]
           err_u = sum [ w*(indicator $ l/=f_itr d) | (w,(l,d)) <- wus]
               
-          alpha = 0.5 * (log $ (1-err)/err)
+--           alpha = 0.5 * (log $ (1-err)/(err)) -- causes a NaN when err=0
+          alpha = 0.5 * (log $ (1-err)/(err+0.00001))
           
-          es'  = (alpha,f_itr):es
+          es'  = (alpha,model,classifier):es
 {-          wus'_unnorm = [ let l'=big_f d in
                           ((exp $ -(bool2num $ l'==big_f d)),(l',d)) | (w,(l,d)) <- wus]
           wls'_unnorm = [ ((exp $ -(bool2num $ l ==big_f d)),(l, d)) | (w,(l,d)) <- wls]-}
@@ -81,3 +83,4 @@ trainItr itr trainer classifier wls wus (Ensemble es) = do
           big_f = classify $ Ensemble es'
           classifier_test = eval (big_f) [dp | (w,dp) <- wls++wus]
              
+          stopCondition = err>0.5
