@@ -81,12 +81,12 @@ test = do
                  hClose hout
                  
             | alg <- 
-                ("RegularizedBoost-NB",RegularizedBoost.train NaiveBayes.train NaiveBayes.classify) :
-                ("SemiMarginBoost-NB",SemiMarginBoost.train NaiveBayes.train NaiveBayes.classify) :
-                ("ASSEMBLE-NB",ASSEMBLE.train NaiveBayes.train NaiveBayes.classify):
+--                 ("RegularizedBoost-NB",RegularizedBoost.train NaiveBayes.train NaiveBayes.classify) :
+--                 ("SemiMarginBoost-NB",SemiMarginBoost.train NaiveBayes.train NaiveBayes.classify) :
+--                 ("ASSEMBLE-NB",ASSEMBLE.train NaiveBayes.train NaiveBayes.classify):
 --                 ("SemiBoost-NB",SemiBoost.train NaiveBayes.train NaiveBayes.classify):
---                 ("AdaBoost-NB",sup2semi AdaBoost.train NaiveBayes.train NaiveBayes.classify):
-                ("MarginBoost-NB",sup2semi MarginBoost.train NaiveBayes.train NaiveBayes.classify):
+                ("AdaBoost-NB",sup2semi AdaBoost.train NaiveBayes.train NaiveBayes.classify):
+--                 ("MarginBoost-NB",sup2semi MarginBoost.train NaiveBayes.train NaiveBayes.classify):
                 
 --                 ("RegularizedBoost-DS",RegularizedBoost.train DecisionStump.train DecisionStump.classify) :
 --                 ("SemiMarginBoost-DS",SemiMarginBoost.train DecisionStump.train DecisionStump.classify) :
@@ -96,16 +96,16 @@ test = do
 --                 ("AdaBoost-DS",sup2semi AdaBoost.train DecisionStump.train DecisionStump.classify):
                 []
 --             , factor <- [ 0.2, 0.1, 0.05 ]
-            , factor <- [ 0.002 ]
+            , factor <- [ 0.2 ]
 --             , seed <- [1..10]
-            , seed <- [1..20]
+            , seed <- [1..200]
             , testdatafile <- 
 --                 ("kr-vs-kp.data","won"):
 --                 ("tic-tac-toe.data","positive"):
---                 ("haberman.data","1") :
+                ("haberman.data","1") :
 --                 ("optdigits.data","2") :
 --                 ("german.data","1") :
-                ("ringnorm.data","1") :
+--                 ("ringnorm.data","1") :
 --                 ("twonorm.data","1") :
 --                 ("ionosphere.data","g"):
                 []

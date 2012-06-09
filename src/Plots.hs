@@ -1,6 +1,8 @@
 module Main where
 
 import AI.DataLoader
+import AI.MathTmp
+import Histogram
 
 import Control.Monad
 import Data.List
@@ -32,7 +34,7 @@ import Graphics.Gnuplot.Plot.TwoDimensional (linearScale, )
 import qualified Graphics.Gnuplot.LineSpecification as LineSpec
 import qualified Graphics.Gnuplot.ColorSpecification as Color
     
--- csv2boostErr :: [[String]] -> [Double]
+csv2boostErr :: (Num t) => String -> [[String]] -> [(String, t, [Double])]
 csv2boostErr title xs = 
     [ ("",     1, matmap (quantile 0.1) $ doubledata xs)
     , (title', 2, matmap mean           $ doubledata xs)
@@ -46,22 +48,14 @@ csv2boostErr title xs =
                           then ' '
                           else x)
                 title
-    
--- csv2boostHist :: [[String]] -> [Double]
-csv2boostHist title xs = 
-    [ ("", 1, matmap (quantile 0.1) $ doubledata xs)
-    , ("", 2, matmap mean           $ doubledata xs)
-    , ("", 1, matmap (quantile 0.9) $ doubledata xs)
-    ]
 
-csv2boostHist' title xs = 
---     last2nd $ head $ doubledata xs
-    histogram $ map (\x-> floor $ x*100) $ map (\ys -> (last2nd ys)-(head ys)) $ doubledata xs
-    where 
-        last2nd ys = head $ tail $ reverse ys
-        
-histogram :: Ord a => [a] -> Map.Map a Int
-histogram xs = Map.fromList [ (head l, length l) | l <- group (sort xs) ]
+-- csv2boostHist :: (Num t) => String -> [[String]] -> [(String, t, [Double])]
+csv2boostHist title xs = 
+    map boostingperf $ doubledata xs
+    
+boostingperf xs = (head $ tail $ reverse xs) - (head $ tail $ tail $ tail xs)
+    
+-- helpers
 
 matmap :: ([a]->b) -> [[a]] -> [b]
 matmap f xs = reverse $ matmap' f xs
@@ -81,30 +75,6 @@ doubledata xs =
         )
         xs
         
--- Math functions copied from Math.Statistics because the whole thing wouldn't compile
-
-mean :: Floating a => [a] -> a
-mean x = fst $ foldl' (\(m, n) x -> (m+(x-m)/(n+1),n+1)) (0,0) x
--- mean x = fst $ foldl' (\(!m, !n) x -> (m+(x-m)/(n+1),n+1)) (0,0) x
-    
--- |Arbitrary quantile q of an unsorted list.  The quantile /q/ of /N/
--- |data points is the point whose (zero-based) index in the sorted
--- |data set is closest to /q(N-1)/.
-quantile :: (Fractional b, Ord b) => Double -> [b] -> b
-quantile q = quantileAsc q . sort
-
--- |As 'quantile' specialized for sorted data
-quantileAsc :: (Fractional b, Ord b) => Double -> [b] -> b
-quantileAsc _ [] = error "quantile on empty list"
-quantileAsc q xs
-    | q < 0 || q > 1 = error "quantile out of range"
-    | otherwise = xs !! (quantIndex (length xs) q)
-    where quantIndex :: Int -> Double -> Int
-          quantIndex len q = case round $ q * (fromIntegral len - 1) of
-                               idx | idx < 0    -> error "Quantile index too small"
-                                   | idx >= len -> error "Quantile index too large"
-                                   | otherwise  -> idx
-
 -- types of plots
 
 boostErr :: [(String,Double,[Double])] -> Frame.T (Graph2D.T Int Double)
@@ -138,23 +108,6 @@ boostErrComp xs =
     mconcat $ concat 
     [ [head $ tail $ mkErrLines color ys] | (color,ys) <- xs ]
         
-        
-boostHist :: [(String,Double,[Double])] -> Frame.T (Graph2D.T Int Double)
-boostHist xs =
-    Frame.cons (
-        Opts.title "Boosting Error Progression" $
-        Opts.xLabel "Number of boosting iterations" $
-        Opts.yLabel "Error" $
-        Opts.deflt) $
-    mconcat $
-    map (\(title,width,dat) ->
-        fmap (Graph2D.lineSpec (
-            LineSpec.title title $ 
-            LineSpec.lineWidth width $
-            LineSpec.deflt
-            )) $
-        Plot2D.list Graph2D.listLines dat) $ xs
-
 -- plotting IO
           
 loadResults plottingFunc filename = liftM (liftM $ plottingFunc filename) $ loadCSV filename
@@ -165,13 +118,9 @@ plotFile file = do
     eitherBoostHist <- loadResults csv2boostHist file
     sequence_
         [ Plot.plot (SVG.cons $ file++".boostErr.svg") $ boostErr $ right eitherBoostErr
-        , Plot.plot (SVG.cons $ file++".boostHist.svg") $ boostHist $ right eitherBoostHist
+--         , Plot.plot (SVG.cons $ file++".boostHist.svg") $ boostHist $ right eitherBoostHist
         ]    
-{-    liftM sequence_ $ do
-        ds <- eitherdata
-        return 
-            [ Plot.plot (PNG.cons $ resdir++"list.png") $ plotLine ds
-            ]-}
+    hist2svg (file++".boostHistogram.svg") $ histogram $ right eitherBoostHist
 right (Right xs) = xs
           
 algCompare fs = do
@@ -182,7 +131,6 @@ algCompare fs = do
             zip [ Color.red, Color.green, Color.blue, Color.black ]
                 [ right ebe | ebe <- eitherBoostErr ]
         ]
-        
         
 plotAllFiles tmpdir resdir = do
     setCurrentDirectory tmpdir
