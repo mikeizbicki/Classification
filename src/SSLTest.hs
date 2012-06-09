@@ -16,6 +16,7 @@ import qualified AI.SemiSupervised.RegularizedBoost as RegularizedBoost
 import Control.Monad
 import Control.Monad.Writer
 
+import Data.List
 import Database.HDBC
 import Debug.Trace
 import System.IO
@@ -63,6 +64,48 @@ s2ss:: StdGen -> Double -> [(Bool,a)] -> ([(Bool,a)],[a])
 s2ss rgen factor xs = (l1, map snd l2)
     where (l1,l2)=randSplit rgen factor xs
 
+--
+
+-- s2ssX=s2ss
+s2ssX:: StdGen -> Int -> [(Bool,a)] -> ([(Bool,a)],[a])
+s2ssX rgen count ds = (fst xs,map snd $ snd xs)
+    where 
+        is=chooseIndices rgen count ds
+        xs=splitIndices ds is
+
+splitIndices ::[(Bool,a)] -> [Int] -> ([(Bool,a)],[(Bool,a)])
+splitIndices ds is = 
+    splitIndicesWalker ds (sort is) 0 [] []
+    
+splitIndicesWalker (d:[]) []     count s1 s2 = (s1,d:s2)
+splitIndicesWalker (d:[]) (i:[]) count s1 s2 = (d:s1,s2)
+splitIndicesWalker (d:ds) []     count s1 s2 = (s1,(d:ds)++s2)
+splitIndicesWalker (d:ds) (i:is) count s1 s2 = 
+    if i==count
+       then splitIndicesWalker ds (is) (count+1) (d:s1) s2
+       else splitIndicesWalker ds (i:is) (count+1) s1 (d:s2)
+
+itest = [(True,1),(True,20),(True,3),(True,4),(False,10),(False,11),(False,-12),(False,13)]
+
+chooseIndices :: StdGen -> Int -> [(Bool,a)] -> [Int]
+chooseIndices rgen count ds = chooseIndicesItr rgen count ds S.empty S.empty
+
+chooseIndicesItr :: StdGen -> Int -> [(Bool,a)] -> S.Set Int -> S.Set Int -> [Int]
+chooseIndicesItr rgen count ds ts fs = 
+    if S.size ts==count && S.size fs==count
+       then (S.toList ts)++(S.toList fs)
+       else if (fst $ ds !! r)
+               then if (S.size ts<count)
+                       then chooseIndicesItr rgen' count ds (S.insert r ts) fs 
+                       else chooseIndicesItr rgen' count ds ts fs
+               else if (S.size fs<count)
+                       then chooseIndicesItr rgen' count ds ts (S.insert r fs)
+                       else chooseIndicesItr rgen' count ds ts fs
+    where  
+        (r,rgen')=randomR (0,(length ds)-1) rgen
+
+--
+
 sup2semi :: STrainer model -> SSTrainer model
 sup2semi trainer = \t -> \c -> \ls -> \us -> trainer t c ls
    --
@@ -70,22 +113,25 @@ sup2semi trainer = \t -> \c -> \ls -> \us -> trainer t c ls
 main=test
 test = do
     let x = [ do
-                 putStrLn $ "TEST = "++(show testdatafile)++"-"++(fst alg)++"-"++(show factor)++"-"++(show seed)
-                 let outfile = "../results/"++(fst testdatafile)++"-"++(fst alg)++"-"++(show factor)++{-"-"++(show seed)++-}".csv"
+                 putStrLn $ "TEST = "++(show testdatafile)++"-"++(fst alg)++"-"++(show count)++"-"++(show seed)
+                 let outfile = "../results/"++(fst testdatafile)++"-"++(fst alg)++"-"++(show count)++{-"-"++(show seed)++-}".csv"
+--                  putStrLn $ "TEST = "++(show testdatafile)++"-"++(fst alg)++"-"++(show factor)++"-"++(show seed)
+--                  let outfile = "../results/"++(fst testdatafile)++"-"++(fst alg)++"-"++(show factor)++{-"-"++(show seed)++-}".csv"
                  hout <- openFile outfile AppendMode
                  dm <- loadData $ "../testdata/"++(fst testdatafile)
                  seq dm $ printTest hout $ do
                     ds <- dm
                     let bds = toBinaryData (snd testdatafile) ds
-                    return $  performTest seed alg factor bds
+                    return $  performTestExtreme seed alg count bds
+--                     return $  performTest seed alg factor bds
                  hClose hout
                  
             | alg <- 
---                 ("RegularizedBoost-NB",RegularizedBoost.train NaiveBayes.train NaiveBayes.classify) :
+                ("RegularizedBoost-NB",RegularizedBoost.train NaiveBayes.train NaiveBayes.classify) :
 --                 ("SemiMarginBoost-NB",SemiMarginBoost.train NaiveBayes.train NaiveBayes.classify) :
 --                 ("ASSEMBLE-NB",ASSEMBLE.train NaiveBayes.train NaiveBayes.classify):
 --                 ("SemiBoost-NB",SemiBoost.train NaiveBayes.train NaiveBayes.classify):
-                ("AdaBoost-NB",sup2semi AdaBoost.train NaiveBayes.train NaiveBayes.classify):
+--                 ("AdaBoost-NB",sup2semi AdaBoost.train NaiveBayes.train NaiveBayes.classify):
 --                 ("MarginBoost-NB",sup2semi MarginBoost.train NaiveBayes.train NaiveBayes.classify):
                 
 --                 ("RegularizedBoost-DS",RegularizedBoost.train DecisionStump.train DecisionStump.classify) :
@@ -96,16 +142,17 @@ test = do
 --                 ("AdaBoost-DS",sup2semi AdaBoost.train DecisionStump.train DecisionStump.classify):
                 []
 --             , factor <- [ 0.2, 0.1, 0.05 ]
-            , factor <- [ 0.2 ]
+--             , factor <- [ 0.2 ]
+            , count <- [ 2..10 ]++[15, 20, 25, 30, 50, 100, 1]
 --             , seed <- [1..10]
-            , seed <- [1..200]
+            , seed <- [1..10]
             , testdatafile <- 
 --                 ("kr-vs-kp.data","won"):
 --                 ("tic-tac-toe.data","positive"):
-                ("haberman.data","1") :
+--                 ("haberman.data","1") :
 --                 ("optdigits.data","2") :
 --                 ("german.data","1") :
---                 ("ringnorm.data","1") :
+                ("ringnorm.data","1") :
 --                 ("twonorm.data","1") :
 --                 ("ionosphere.data","g"):
                 []
@@ -121,6 +168,16 @@ performTest seed (strTrainer,trainer) factor bds = (out,res)
           (ens,aitrace) = (runWriter $ trainer ls (take 1000 us))
           (train_data,test_data) = randSplit rgen (0.8) bds
           (ls,us) = s2ss rgen (factor) train_data
+
+performTestExtreme seed (strTrainer,trainer) count bds = (out,res)
+    where
+          rgen = mkStdGen seed
+          res = strTrainer++","++(show seed)++","++(show count)++","++(list2csv $ perfTrace ens test_data)
+          out = concat $ map (\x -> "\n"++x) aitrace
+          (ens,aitrace) = (runWriter $ trainer ls (take 1000 us))
+          (train_data,test_data) = randSplit rgen (0.8) bds
+          (ls,us) = s2ssX rgen (count) train_data
+
 
 printTest :: (Show a) => Handle -> Either a (String,String) -> IO ()
 printTest hout (Left err) = putStrLn $ show err
