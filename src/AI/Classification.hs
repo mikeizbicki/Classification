@@ -35,7 +35,6 @@ type Classifier a b = b -> DataPoint -> a
 
 type BoolClassifier b = b -> [SqlValue] -> Bool
 
-
 -- Binary functions
 
 toBinaryData :: Label -> TrainingData -> [(Bool,DataPoint)]
@@ -121,3 +120,4 @@ randList rgen n interval = if r==r
     where (r,rgen') = randomR interval rgen
 
 sampleTest = map length $group $ sample (mkStdGen 20) 5500 [(1,n) | n <- [1..50]]
+
