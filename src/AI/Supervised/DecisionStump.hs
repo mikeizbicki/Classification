@@ -1,7 +1,10 @@
+{-# LANGUAGE MultiParamTypeClasses,FlexibleInstances,FlexibleContexts #-}
+
 module AI.Supervised.DecisionStump
     where
 
 import AI.Classification
+import AI.Ensemble as E
 
 import Data.List
 import Data.List.Extras
@@ -105,6 +108,9 @@ lg :: Double -> Double -- base 2 logarithm
 lg x = log x / log 2
 
 -- classification
+
+instance (Ord label) => E.ClassifyModel (DTree label) label where
+    classify dt sqlL = fst $ argmaxBy compare snd $ probList dt sqlL
 
 classify :: (Ord a) => DTree a -> [SqlValue] -> a
 classify dt sqlL = fst $ argmaxBy compare snd $ probList dt sqlL

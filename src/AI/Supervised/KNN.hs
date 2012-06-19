@@ -1,28 +1,54 @@
+{-# LANGUAGE TypeSynonymInstances, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+
 module AI.Supervised.KNN
     where
 
+import Data.List
 import Data.List.Extras
+import Data.Trees.KdTree
 import Database.HDBC
 
 import AI.Classification
+import qualified AI.Ensemble as E
 
 -- Data types
 
-data KNN a = KNN
+data KNN label = KNN 
+    { kdtree :: KdTree (label,DataPoint)
+    , k :: Int
+    }
+    deriving Show
+
+instance Point (label,DataPoint) where
+    
+    dimension (l,p) = length p
+    
+    coord n (l,p) = fromSql (p !! n)
+    
 
 -- Training
 
-train :: (Ord a) => [(a,[SqlValue])] -> KNN a
-train xs = KNN
+train :: (Ord label) => Int -> [(label,DataPoint)] -> KNN label
+train k xs = KNN 
+    { kdtree=fromList xs
+    , k=k
+    }
 
 -- classification
 
-classify :: (Ord a) => KNN a -> [SqlValue] -> a
+instance E.ClassifyModel (KNN Bool) Bool where
+    classify nb sqlL = fst $ argmaxBy compare snd $ probList nb sqlL
+
+classify :: (Eq a) => KNN a -> DataPoint -> a
 classify nb sqlL = fst $ argmaxBy compare snd $ probList nb sqlL
 
-probList :: (Ord a) => KNN a -> [SqlValue] -> [(a,Prob)]
-probList (KNN) sqlL = []
-    
+probList :: (Eq a) => KNN a -> DataPoint -> [(a,Prob)]
+probList knn dp = map reduce $ groupBy sameLabel neighbors
+    where
+        reduce xs = (fst $ head xs,(fromIntegral $ length xs)/(fromIntegral $ k knn))
+        sameLabel (l1,d1) (l2,d2) = l1==l2
+        neighbors = kNearestNeighbors (kdtree knn) (k knn) (undefined,dp)
+
 ----
 
 dataset = [("male",[6.0,180,12])
@@ -41,6 +67,6 @@ dataset' = [("male",[6.0,180,12])
 sqldata = map (\(label,xs) -> (label,map (toSql::Double->SqlValue) xs)) dataset
 bdataset = toBinaryData "male" sqldata
 
-trained = train sqldata
-
+trained = train 3 sqldata
+test = map (\x->toSql (x::Double)) [6.0,150,9]
 -- sample = [toSql (5::Double), toSql (130::Double), toSql (8::Double)]

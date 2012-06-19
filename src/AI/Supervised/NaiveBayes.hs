@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances,MultiParamTypeClasses #-}
+
 module AI.Supervised.NaiveBayes
     where
 
@@ -8,6 +10,7 @@ import Database.HDBC
 import Debug.Trace
 
 import AI.Classification
+import qualified AI.Ensemble as E
 
 -- Data types
 
@@ -24,6 +27,14 @@ data NBayesDist = Gaussian !Double -- M
                 | PDF !(Map.Map String Int)
 --                 | PDF (Map.Map SqlValue Int)
     deriving Show
+
+-- Ensemble
+
+-- trainE :: (Ord a) => [(a,[SqlValue])] -> E.Ensemble (NBayes a)
+trainE :: [(Bool,[SqlValue])] -> E.Ensemble (NBayes Bool)
+trainE xs = E.Ensemble [(1,train xs)]
+
+
 
 -- Training
 
@@ -57,6 +68,10 @@ initDist sql = case safeFromSql sql of
                                     Left _  -> error "initDist: sqlVar was neither double nor string"
 
 -- classification
+
+
+instance E.ClassifyModel (NBayes Bool) Bool where
+    classify nb sqlL = fst $ argmaxBy compare snd $ probList nb sqlL
 
 classify :: (Ord a) => NBayes a -> [SqlValue] -> a
 classify nb sqlL = fst $ argmaxBy compare snd $ probList nb sqlL

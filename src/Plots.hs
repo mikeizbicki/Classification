@@ -2,7 +2,7 @@ module Main where
 
 import AI.DataLoader
 import AI.MathTmp
-import Histogram
+import Graphics.Histogram
 
 import Control.Monad
 import Data.List
@@ -118,7 +118,7 @@ boostErrComp xs =
         Opts.title "" $
         Opts.xLabel "Number of boosting iterations" $
         Opts.yLabel "Error" $
-        Opts.yRange2d (0,0.3) $
+--         Opts.yRange2d (0,0.3) $
         Opts.deflt) $
     mconcat $ concat 
     [ [head $ tail $ mkErrLines color ys] | (color,ys) <- xs ]
@@ -139,7 +139,7 @@ plotFile file = do
         [ Plot.plot (PS.cons $ file++".boostErr.ps") $ boostErr $ right eitherBoostErr
 --         , Plot.plot (PS.cons $ file++".boostHist.ps") $ boostHist $ right eitherBoostHist
         ]    
-    hist2svg (file++".boostHistogram.ps") $ histogram $ right eitherBoostHist
+    plot (file++".boostHistogram.ps") $ histogram binSturges $ right eitherBoostHist
 right (Right xs) = xs
           
 algCompare resdir fs = do

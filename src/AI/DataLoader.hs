@@ -28,7 +28,13 @@ csv2data csv = map (\dp -> (last dp, map cell2sql $ init dp)) csv
               cell2sql x = toSql $ case (reads x::[(Double,String)]) of
                                         []     -> toSql (x::String)
                                         (x:xs) -> toSql $ fst x
-    
+
+
+
+-- | Converts a list into CSV format for writing
+list2csv :: (Show a) => [a] -> String
+list2csv xs = init $ tail $ show xs
+
 -- CSV parser from "Real World Haskell," p. 391
 -- modified to allow multiple spaces between cells
     

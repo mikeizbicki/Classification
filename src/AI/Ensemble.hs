@@ -40,7 +40,7 @@ weightedClassify (Ensemble xs) dp = (sum $ [alpha * (bool2num $ classify model d
 similarity :: DataPoint -> DataPoint -> Double
 similarity dp1 dp2 = {-trace (" << "++show diff)-} res
     where res = exp $ (-1 * (sqrt $ diff) / (2*sigma^2))
-          sigma = 1
+          sigma = 5
           diff = sum [ sqlminus x1 x2 | (x1,x2) <- zip dp1 dp2] :: Double
           
           

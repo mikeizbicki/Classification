@@ -24,12 +24,6 @@ instance Ord SqlValue where
 type DataPoint = [SqlValue]
 type TrainingData = [(Label,DataPoint)]
 
-data TrainingVec label = TrainingVec { weights :: V.Vector Double
-                                     , labels :: V.Vector label
-                                     , dataPoints :: V.Vector DataPoint
-                                     , numLabels :: Int
-                                     }
-
 type Trainer a b = [(a,DataPoint)] -> b
 type Classifier a b = b -> DataPoint -> a
 
@@ -84,40 +78,3 @@ errorRate (PD xs) = err $ foldl add (0,0) $ map (\(l,(t,f))->(t,f)) $ Map.toList
 type LogAI a = Writer [String] a
 
 logAI str = tell [str]
-
--- Sampling from weighted lists
-
-sample :: (Show a,Eq a) => StdGen -> Int -> [(Double,a)] -> [a]
-sample rgen n xs = {-trace ("fst xs: "++(show $ map fst xs)) $-} sampleWalk 0 xs randL
-    where 
-          totalWeights = sum $ map fst xs
-          randL =  sort $ randList rgen n (0,totalWeights)
-
-sampleWalk :: (Show a) => Double -> [(Double,a)] -> [Double] -> [a]
-sampleWalk tally [] _  = []
-sampleWalk tally _  [] = []
-sampleWalk tally (x:xs) (y:ys) = 
-    if not sanity
-       then error $ "sample: One of the sampling weights is either NaN or Infinity:" -- ++(show xs) ++ " -- "++(show ys)
-       else if ((fst x)+tally)>(y)
-               then (snd x):(sampleWalk tally (x:xs) $ ys)
-               else sampleWalk (tally+(fst x)) (xs) (y:ys)
-       
-    where sanity = (isNumber $ fst x) && (isNumber y)
-
-isNumber :: Double -> Bool
-isNumber x = if x/=x -- x is NaN
-                then False
-                else if x==x+1 -- x is +/- Infinity
-                        then False
-                        else True
-
-randList :: (Random a, Eq a) => StdGen -> Int -> (a,a) -> [a]
-randList rgen 0 interval = []
-randList rgen n interval = if r==r
-                              then r:(randList rgen' (n-1) interval)
-                              else error "randList: r/=r --> r==NaN"
-    where (r,rgen') = randomR interval rgen
-
-sampleTest = map length $group $ sample (mkStdGen 20) 5500 [(1,n) | n <- [1..50]]
-
