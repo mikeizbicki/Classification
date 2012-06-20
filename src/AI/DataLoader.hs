@@ -2,18 +2,20 @@ module AI.DataLoader
     where
 
 import Control.Monad
-import Database.HDBC
+import Debug.Trace
 import System.IO
 import Text.ParserCombinators.Parsec
 
 import AI.Classification
 
+-------------------------------------------------------------------------------
+
 -- IO functions
 
-loadData :: String -> IO (Either ParseError TrainingData)
-loadData filename = do
+loadData :: String -> Maybe String -> Maybe [String->DataItem] -> IO (Either ParseError (TrainingData String))
+loadData filename missingStr fs = do
     csv <- loadCSV filename
-    return $ liftM csv2data csv
+    return $ liftM (csv2data missingStr fs) csv
 
 loadCSV :: String -> IO (Either ParseError [[String]])
 loadCSV filename = do
@@ -22,14 +24,32 @@ loadCSV filename = do
     let ds = parseCSV str
     return ds
 
-csv2data :: [[String]] -> TrainingData
-csv2data csv = map (\dp -> (last dp, map cell2sql $ init dp)) csv
-        where 
-              cell2sql x = toSql $ case (reads x::[(Double,String)]) of
-                                        []     -> toSql (x::String)
-                                        (x:xs) -> toSql $ fst x
+---------------
 
+csv2data :: Maybe String -> Maybe [String -> DataItem] -> [[String]] -> TrainingData String
+csv2data missingStr Nothing   csv = csv2dataAuto missingStr csv
+csv2data missingStr (Just fs) csv = csv2dataForce missingStr fs csv
 
+csv2dataAuto :: Maybe String -> [[String]] -> TrainingData String
+csv2dataAuto missingStr csv = map (\dp -> (last dp, map cell2sql $ init dp)) csv
+    where 
+        cell2sql x = 
+            if Just x==missingStr
+               then Missing
+               else case (reads x::[(Double,String)]) of
+                        []     -> toDataItem (x::String)
+                        (x:xs) -> toDataItem $ fst x
+
+csv2dataForce :: Maybe String -> [String -> DataItem] -> [[String]] -> TrainingData String
+csv2dataForce missingStr fs csv = 
+    [(last line,
+        [ if Just cell==missingStr
+             then Missing
+             else f cell
+        | (f,cell) <- zip fs $ init line
+        ])
+    | line <- csv
+    ]
 
 -- | Converts a list into CSV format for writing
 list2csv :: (Show a) => [a] -> String
@@ -64,7 +84,7 @@ eol =   try (string "\n\r")
 -- test csv parsing
 
 csv_test = do
-    dm <- loadData "../testdata/ringnorm.data"
+    dm <- loadData "../testdata/ringnorm.data" Nothing Nothing
     putStrLn $ func dm
     where
           func (Left x) = show x

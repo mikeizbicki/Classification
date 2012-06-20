@@ -3,7 +3,6 @@
 module AI.Boosting
     where
 
-import Database.HDBC
 import Debug.Trace
 import System.Random
 
@@ -15,6 +14,8 @@ import AI.Classification -- (num2bool, bool2num, indicator, eval, sample, logAI,
 import AI.Ensemble
 import AI.RandomUtils
 
+import Control.Monad.Random 
+import System.Random
 {-
 
 This is a generic boosting framework.
@@ -24,6 +25,7 @@ This is a generic boosting framework.
 data BoostParams model = BoostParams 
     { iterations :: Int 
     , sampleRate :: Int
+    , obeyStopCriteria :: Bool
     , trainer :: Trainer Bool model 
     }
 
@@ -92,9 +94,8 @@ ssmBoost params ls us = BoostAlg
             margin i = (bool2num $ _y' i)*(_F' i)
         in (_D0 (ssmBoost params ls us) i)*(cost' $ margin i)
           
-    , stopCondition = \td -> \td' -> False
-{-    , stopCondition = \td -> \td' -> 
-        0 >= (stopIndex (ssmBoost params ls us) td td')-}
+    , stopCondition = \td -> \td' -> 
+        0 >= (stopIndex (ssmBoost params ls us) td td')
         
     , stopIndex = \td -> \td' ->
         let _D i = weights td V.! i
@@ -152,9 +153,8 @@ marginBoost params ls us = BoostAlg
             margin i = (bool2num $ _y i)*(_F i)
         in cost' $ margin i
 
-    , stopCondition = \td -> \td' -> False
-{-    , stopCondition = \td -> \td' -> 
-        0 >= (stopIndex (ssmBoost params ls us) td td')-}
+    , stopCondition = \td -> \td' -> 
+        0 >= (stopIndex (marginBoost params ls us) td td')
         
     , stopIndex = \td -> \td' ->
         let _D i = weights td V.! i
@@ -241,9 +241,8 @@ semiBoost params ls us = (ssmBoost params ls us)
           
         in abs $ (p i) - (q i)
 
-    , stopCondition = \td -> \td' -> False
-{-    , stopCondition = \td -> \td' -> 
-        0 >= (stopIndex (ssmBoost params ls us) td td')-}
+    , stopCondition = \td -> \td' -> 
+        0 >= (stopIndex (ssmBoost params ls us) td td')
         
     , stopIndex = \td -> \td' ->
         let _D i = weights td V.! i
@@ -339,8 +338,9 @@ regAssembleBoost1 params ls us = (ssmBoost params ls us)
 
 train :: (ClassifyModel model Bool)=>BoostAlgCreator model -> BoostParams model -> [(Bool,DataPoint)] -> [(DataPoint)] -> LogAI (Ensemble model)
 train algcreator param ls us = do
+    seed' <- getRandom -- (1,100000::Int)
     logAI $ (name alg)++".train"
-    trainItrArr alg param 0 td (Ensemble [])
+    trainItrArr alg param 0 seed' td (Ensemble [])
                   
     where 
         alg = algcreator param ls us
@@ -360,21 +360,22 @@ train algcreator param ls us = do
         model = genModelFromDistribution 0 param weightsVec labelsVec dataVec
         f i = (classify model) (dataVec VB.! i)
           
-trainItrArr :: (ClassifyModel model Bool)=>BoostAlg -> BoostParams model -> Int -> TrainingVec Bool -> Ensemble model -> LogAI (Ensemble model)
-trainItrArr alg param itr td (Ensemble es) = do
+trainItrArr :: (ClassifyModel model Bool)=>BoostAlg -> BoostParams model -> Int -> Int -> TrainingVec Bool -> Ensemble model -> LogAI (Ensemble model)
+trainItrArr alg param itr seed td (Ensemble es) = do
+    seed' <- getRandom -- (1,100000::Int)
     logAI $ (name alg) ++ ".trainItr: " ++ (show itr)
           ++ "  --  l/u="++(show $ numLabels td)++"/"++(show $ V.length $ labels td)
           ++ "  --  "++(show $ classifier_test)
           ++ "  --  "++(show $ stopIndex alg td td')
           ++ "  --  "++(show $ errorRate classifier_test)
-    if (stopCondition alg td td') || itr>=iterations param
-       then return $ Ensemble es
-       else trainItrArr alg param (itr+1) td' (Ensemble es')
+    if ( (obeyStopCriteria param) && (stopCondition alg td td') ) || itr>=iterations param
+       then return $ Ensemble $ (replicate (iterations param - length es) (0,snd $ head es))++es
+       else trainItrArr alg param (itr+1) seed' td' (Ensemble es')
     
     where 
           -- sample our next distribution
           wds = zip (V.toList $ weights td) (zip (V.toList $ labels td) (VB.toList $ dataPoints td))
-          sampledist = sample (mkStdGen itr) (sampleRate param) wds
+          sampledist = sample (mkStdGen seed) (sampleRate param) wds
           f = classify model
           model = (trainer param) sampledist
           
@@ -388,7 +389,7 @@ trainItrArr alg param itr td (Ensemble es) = do
 
           _F' = weightedClassify $ Ensemble es'
 --           _F  = weightedClassify $ Ensemble es
-          classifier_test = eval (num2bool . _F') [ (_y i,_x i) | i <- indices alg]
+          classifier_test = genConfusionMatrix (num2bool . _F') [ (_y i,_x i) | i <- indices alg]
 
           labels' = V.fromList [ newlabel i | i<-indices alg]
           newlabel i = if i<numLabels td

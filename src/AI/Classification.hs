@@ -1,8 +1,10 @@
+{-# LANGUAGE ConstraintKinds, RankNTypes, FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
+
 module AI.Classification 
     where
       
 import Control.Monad.Writer
-import Database.HDBC
+import Control.Monad.Random
 import System.Random
 import Data.List
 import Debug.Trace
@@ -10,71 +12,102 @@ import Debug.Trace
 import qualified Data.Map as Map
 import qualified Data.Vector as V
 
+-------------------------------------------------------------------------------
 -- data types
       
-type Label = String
+data DataItem = Discrete String
+              | Continuous Double
+              | Missing
+    deriving (Show,Eq)
+
+instance Ord DataItem where
+    compare (Continuous a) (Continuous b) = compare a b
+    compare (Discrete a)   (Discrete b)   = compare a b
+    compare (Continuous a) (Discrete b) = LT
+    compare (Discrete a)   (Continuous b) = GT
+    compare _ Missing = LT
+    compare Missing _ = GT
+
+class DataItemConverter di where
+    fromDataItem :: DataItem -> di
+    toDataItem :: di -> DataItem
+    
+instance DataItemConverter String where
+    fromDataItem (Discrete di) = di
+    fromDataItem x = error $ "DIC.String: non-exhaustive patterns: "++show x
+    toDataItem di = Discrete di
+    
+instance DataItemConverter Double where
+    fromDataItem (Continuous di) = di
+    fromDataItem x = error $ "DIC.Double: non-exhaustive patterns: "++show x
+    toDataItem di = Continuous di
+
+-- convenience types
+
+type DataPoint = [DataItem]
+type TrainingData labelType = [(labelType,DataPoint)]
+
+type Trainer labelType model = [(labelType,DataPoint)] -> model
+type Classifier labelType model = model -> DataPoint -> labelType
+
 type Prob = Double
-
-instance Ord SqlValue where
-    compare (SqlDouble a) (SqlDouble b) = compare a b
-    compare (SqlString a) (SqlString b) = compare a b
-    compare (SqlDouble a) (SqlString b) = LT
-    compare (SqlString a) (SqlDouble b) = GT
-
-type DataPoint = [SqlValue]
-type TrainingData = [(Label,DataPoint)]
-
-type Trainer a b = [(a,DataPoint)] -> b
-type Classifier a b = b -> DataPoint -> a
-
-type BoolClassifier b = b -> [SqlValue] -> Bool
 
 -- Binary functions
 
-toBinaryData :: Label -> TrainingData -> [(Bool,DataPoint)]
+toBinaryData :: (Eq labelType) => labelType -> TrainingData labelType -> TrainingData Bool
 toBinaryData l ds = map (\(l',dp) -> (l'==l,dp)) ds
 
-toBinaryClassifier :: (Eq a) => a -> Classifier a b -> BoolClassifier b
+toBinaryClassifier :: (Eq labelType) => labelType -> Classifier labelType model -> Classifier Bool model
 toBinaryClassifier label classifier = \model -> \dp -> classifier model dp == label
                                                           
--- toBinaryClassifier model l classifier = \x -> (classifier model x)==l
-                                           
--- toBinaryTrainer :: [(Label,[SqlValue])] -> NBayes
+-------------------------------------------------------------------------------
+-- Binary/Integer conversion utilities
      
 bool2num :: (Num a) => Bool -> a
-bool2num b = if b
-                 then 1
-                 else -1
+bool2num b = 
+    if b
+        then 1
+        else -1
                  
 num2bool :: (Num a,Ord a) => a -> Bool
-num2bool n = if n>0
-                then True
-                else False
+num2bool n = 
+    if n>0
+        then True
+        else False
      
 indicator :: (Num a) => Bool -> a
-indicator bool = if bool
-                    then 1
-                    else 0
-     
+indicator bool = 
+    if bool
+        then 1
+        else 0
+
+-------------------------------------------------------------------------------
 -- Performance measuring
 
-data PerformanceDesc a = PD (Map.Map a (Int,Int))
+data ConfusionMatrix a = CM (Map.Map a (Int,Int))
     deriving Show
 
-eval :: (Ord a) => ([SqlValue] -> a) -> [(a,[SqlValue])] -> PerformanceDesc a
-eval c ds = PD $ foldl (Map.unionWith uFunc) Map.empty $ map (\(l,dp) -> Map.singleton l $ func $l==c dp) ds
+genConfusionMatrix :: (Ord a) => (DataPoint -> a) -> [(a,DataPoint)] -> ConfusionMatrix a
+genConfusionMatrix c ds = CM $ foldl (Map.unionWith uFunc) Map.empty $ map (\(l,dp) -> Map.singleton l $ func $l==c dp) ds
     where
-          uFunc (a1,b1) (a2,b2) = (a1+a2,b1+b2)
-          func True = (1,0)
-          func False= (0,1)
+        uFunc (a1,b1) (a2,b2) = (a1+a2,b1+b2)
+        func True = (1,0)
+        func False= (0,1)
 
-errorRate :: PerformanceDesc a -> Double
-errorRate (PD xs) = err $ foldl add (0,0) $ map (\(l,(t,f))->(t,f)) $ Map.toList xs
-    where add (t1,f1) (t2,f2) = (t1+t2,f1+f2)
-          err (t,f) = (fromIntegral f)/(fromIntegral $ t+f)
+errorRate :: ConfusionMatrix a -> Double
+errorRate (CM xs) = err $ foldl add (0,0) $ map (\(l,(t,f))->(t,f)) $ Map.toList xs
+    where 
+        add (t1,f1) (t2,f2) = (t1+t2,f1+f2)
+        err (t,f) = (fromIntegral f)/(fromIntegral $ t+f)
 
+-------------------------------------------------------------------------------
 -- Logging
 
-type LogAI a = Writer [String] a
+type LogAIRand a g = (RandomGen g) => RandT g (Writer [String]) a
+type LogAI a = RandT StdGen (Writer [String]) a
 
+logAI :: MonadWriter [String] m => String -> m ()
 logAI str = tell [str]
+
+runAI :: Int -> LogAI a -> (a,[String])
+runAI seed m = runWriter $ evalRandT m (mkStdGen seed)
