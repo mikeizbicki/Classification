@@ -53,7 +53,14 @@ csv2dataForce missingStr fs csv =
 
 -- | Converts a list into CSV format for writing
 list2csv :: (Show a) => [a] -> String
-list2csv xs = init $ tail $ show xs
+list2csv xs = foldl addcommas "" $ map addquotes xs
+    where
+        addcommas x y = 
+            if x==""
+               then y
+               else x++","++y
+        addquotes x = "\""++show x++"\""
+-- list2csv xs = init $ tail $ show xs
 
 -- CSV parser from "Real World Haskell," p. 391
 -- modified to allow multiple spaces between cells

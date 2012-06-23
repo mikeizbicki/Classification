@@ -1,38 +1,33 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances, FlexibleContexts, ExistentialQuantification #-}
 
 module AI.Ensemble
     where
 
+import qualified Data.Vector.Unboxed as V
+import qualified Data.Vector as VB
+
 import Debug.Trace
 import Data.List.Extras
+import Data.Monoid
 import AI.Classification
 
 -------------------------------------------------------------------------------
 -- data types
 
-class ClassifyModel model label where 
+-- class ClassifyModelConf modelConf where
+    
+
+class ClassifyModel model label | model -> label where
+    modelName :: model -> String
+    
+    train :: model -> TrainingData label -> UnlabeledData -> LogAI model
+
     probClassify :: model -> DataPoint -> [(label,Prob)]
     
     classify :: model -> DataPoint -> label
     classify model dp = fst $ argmaxBy compare snd $ probClassify model dp
-    
-data Ensemble model = Ensemble ![(Double,model)]
 
-instance (Show b) => Show (Ensemble b) where
-    show (Ensemble xs) = show $ map (\(a,b)->(a)) xs
-
-instance (ClassifyModel basemodel Bool) => ClassifyModel (Ensemble basemodel) Bool where
-    classify ens dp = num2bool $ weightedClassify ens dp    
-    probClassify = error "Ensemble.probClassify not yet implemented"
-
--- data Trainable = forall model label . ClassifyModel model label => MkTrainable model label
-
-
--- classification
-
-weightedClassify :: (ClassifyModel a Bool) => (Ensemble a) -> DataPoint -> Double
-weightedClassify (Ensemble xs) dp = (sum $ [alpha * (bool2num $ classify model dp) | (alpha,model) <- xs])
-
+-- data Classifier label = forall model . (ClassifyModel model label)=>Classifier model
 
 -- similarity functions
 

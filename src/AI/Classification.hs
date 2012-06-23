@@ -44,18 +44,34 @@ instance DataItemConverter Double where
 
 -- convenience types
 
+data DataRate = Relative Double | Absolute Int | Auto
+    deriving Show
+
 type DataPoint = [DataItem]
-type TrainingData labelType = [(labelType,DataPoint)]
 
 type Trainer labelType model = [(labelType,DataPoint)] -> model
 type Classifier labelType model = model -> DataPoint -> labelType
 
 type Prob = Double
 
+-- TrainingData
+
+type TrainingData labelType = [(labelType,DataPoint)]
+type UnlabeledData = [DataPoint]
+
+getAttrType :: TrainingData labelType -> Int -> DataItem
+getAttrType [] attrI = Missing -- error "getAttrType: empty TrainingData.  Either your data has Missing values in every row for this column, or something has gone terribly wrong."
+getAttrType td attrI = 
+    case attr of
+         Missing -> getAttrType (tail td) attrI
+         otherwise -> attr
+    where 
+        attr=(snd $ head td)!!attrI 
+
 -- Binary functions
 
 toBinaryData :: (Eq labelType) => labelType -> TrainingData labelType -> TrainingData Bool
-toBinaryData l ds = map (\(l',dp) -> (l'==l,dp)) ds
+toBinaryData l ds = fmap (\(l',dp) -> (l'==l,dp)) ds
 
 toBinaryClassifier :: (Eq labelType) => labelType -> Classifier labelType model -> Classifier Bool model
 toBinaryClassifier label classifier = \model -> \dp -> classifier model dp == label

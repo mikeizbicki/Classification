@@ -5,6 +5,7 @@ module AI.Supervised.NaiveBayes
     , classify
     , probClassify
     , NBayes
+    , defNBayes
     )
     where
 
@@ -32,12 +33,24 @@ data NBayesDist = Gaussian !Double -- M
                 | PDF !(Map.Map String Int)
     deriving Show
 
+defNBayes = NBayes undefined undefined
+
+-------------------------------------------------------------------------------
+-- ClassifyModel definition
+
+instance (Ord label) => ClassifyModel (NBayes label) label where
+    modelName _ = "NBayes"
+
+    train nb td ud = return $ trainNB td
+
+    probClassify = probClassifyNB
+
 -------------------------------------------------------------------------------
 -- Training
 
-train :: (Ord a) => [(a,[DataItem])] -> NBayes a
-train [] = error "NaiveBayes.train: empty training set"
-train xs = foldl' trainItr emptyBayes xs
+trainNB :: (Ord a) => [(a,[DataItem])] -> NBayes a
+trainNB [] = error "NaiveBayes.train: empty training set"
+trainNB xs = foldl' trainItr emptyBayes xs
     where emptyBayes = NBayes Map.empty $ replicate (length $ snd $ head xs) $ NBayesComponent $ Map.empty
 
 trainItr :: (Ord a) => NBayes a -> (a,[DataItem]) -> NBayes a
@@ -77,17 +90,16 @@ initDist sql =
 -------------------------------------------------------------------------------
 -- classification
 
-instance (Ord a) => ClassifyModel (NBayes a) a where
-    probClassify (NBayes labelC compL) sqlL = 
-        [ (label,prob label)
-        | label <- keyList labelC
-        ]
-        where 
-            totalCount = Map.fold (+) 0 labelC
-            prob label = (probClass label)*(probDataGivenClass label)
-            probClass label = (fromIntegral $ (Map.!) labelC label) / (fromIntegral totalCount)
-            probDataGivenClass label = foldl' (*) 1 $ map (probComp label) $ zip sqlL compL
-            keyList m = map fst $ Map.toAscList m
+probClassifyNB (NBayes labelC compL) sqlL = 
+    [ (label,prob label)
+    | label <- keyList labelC
+    ]
+    where 
+        totalCount = Map.fold (+) 0 labelC
+        prob label = (probClass label)*(probDataGivenClass label)
+        probClass label = (fromIntegral $ (Map.!) labelC label) / (fromIntegral totalCount)
+        probDataGivenClass label = foldl' (*) 1 $ map (probComp label) $ zip sqlL compL
+        keyList m = map fst $ Map.toAscList m
 
 
 probComp :: (Ord a) => a -> (DataItem,NBayesComponent a) -> Prob
@@ -119,6 +131,6 @@ dataset_continuous =
     ,("female",map (toDataItem::Double->DataItem) [5.75,150,9])
     ]
 
-trained = train dataset_continuous
+trained = train defNBayes dataset_continuous [] :: LogAI (NBayes String)
 
 testsample = [toDataItem (5::Double), toDataItem (130::Double), toDataItem (8::Double)]
