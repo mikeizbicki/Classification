@@ -7,11 +7,9 @@ import System.IO
 import Test.HUnit
 
 import AI.Classification
-import AI.Ensemble
-import AI.Supervised.DecisionTree
--- import AI.Supervised.DecisionStump
-import AI.Supervised.NaiveBayes
-import AI.Supervised.KNN
+import AI.Classification.DecisionTree
+import AI.Classification.NaiveBayes
+import AI.Classification.KNN
 
 -------------------------------------------------------------------------------
 -- code for performing tests

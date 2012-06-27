@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module AI.DataLoader
     where
 
@@ -10,12 +12,34 @@ import AI.Classification
 
 -------------------------------------------------------------------------------
 
+data DatafileDesc = DatafileDesc
+    { datafileName :: String
+    , datafileTrueClass :: String
+    , datafileMissingStr :: Maybe String
+    , datafileForce :: Maybe [String -> DataItem]
+    }
+    deriving Show
+        
+instance Show (String->DataItem) where
+    show xs = ""
+
+applyDirPrefix :: String -> DatafileDesc -> DatafileDesc
+applyDirPrefix dir df = df {datafileName = dir++"/"++(datafileName df)}
+
+defDatafileDesc=DatafileDesc
+    { datafileName = error "datafileName empty"
+    , datafileTrueClass = error "datafileTrueClass empty"
+    , datafileMissingStr = Nothing
+    , datafileForce = Nothing
+    }
+
+-------------------------------------------------------------------------------
 -- IO functions
 
-loadData :: String -> Maybe String -> Maybe [String->DataItem] -> IO (Either ParseError (TrainingData String))
-loadData filename missingStr fs = do
-    csv <- loadCSV filename
-    return $ liftM (csv2data missingStr fs) csv
+loadData :: DatafileDesc -> IO (Either ParseError (TrainingData String))
+loadData file = do
+    csv <- loadCSV $ datafileName file
+    return $ liftM (csv2data (datafileMissingStr file) (datafileForce file)) csv
 
 loadCSV :: String -> IO (Either ParseError [[String]])
 loadCSV filename = do
@@ -52,14 +76,15 @@ csv2dataForce missingStr fs csv =
     ]
 
 -- | Converts a list into CSV format for writing
-list2csv :: (Show a) => [a] -> String
+-- list2csv :: (Show a) => [a] -> String
+list2csv :: [String] -> String
 list2csv xs = foldl addcommas "" $ map addquotes xs
     where
         addcommas x y = 
             if x==""
                then y
                else x++","++y
-        addquotes x = "\""++show x++"\""
+        addquotes x = show x
 -- list2csv xs = init $ tail $ show xs
 
 -- CSV parser from "Real World Haskell," p. 391
@@ -91,7 +116,7 @@ eol =   try (string "\n\r")
 -- test csv parsing
 
 csv_test = do
-    dm <- loadData "../testdata/ringnorm.data" Nothing Nothing
+    dm <- loadData $ defDatafileDesc {datafileName="../testdata/ringnorm.data"}
     putStrLn $ func dm
     where
           func (Left x) = show x

@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 
-module AI.Supervised.KNN
+module AI.Classification.KNN
     ( train
     , classify
     , probClassify
@@ -14,7 +14,6 @@ import Data.List.Extras
 import Data.Trees.KdTree
 
 import AI.Classification
-import AI.Ensemble
 
 -------------------------------------------------------------------------------
 -- Data types

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances,MultiParamTypeClasses #-}
 
-module AI.Supervised.NaiveBayes
+module AI.Classification.NaiveBayes
     ( train
     , classify
     , probClassify
@@ -15,7 +15,6 @@ import qualified Data.Map as Map
 import Debug.Trace
 
 import AI.Classification
-import AI.Ensemble
 
 -------------------------------------------------------------------------------
 -- Data types

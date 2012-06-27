@@ -5,33 +5,21 @@ module AI.Testing
 
 import AI.Classification
 import AI.DataLoader
-import AI.Ensemble
 import AI.RandomUtils
-import AI.ASSEMBLE2
+-- import AI.Classification.SemiBoost
+import AI.Classification.Boosting
 
 import Control.Monad
 import Control.Monad.Writer
+
+import qualified Data.Map as Map
+import Data.Maybe
 
 import Debug.Trace
 import System.IO
 import System.Random
 
 -------------------------------------------------------------------------------
-
-data DatafileDesc = DatafileDesc
-    { datafileName :: String
-    , datafileTrueClass :: String
-    , datafileMissingStr :: Maybe String
-    , datafileForce :: Maybe [String -> DataItem]
-    }
-    deriving Show
-
-defDatafileDesc=DatafileDesc
-    { datafileName = ""
-    , datafileTrueClass = ""
-    , datafileMissingStr = Nothing
-    , datafileForce = Nothing
-    }
 
 data TestConfig = TestConfig
     { ldr :: DataRate -- ^ labeled data rate
@@ -41,10 +29,8 @@ data TestConfig = TestConfig
     , resultsDir :: String
     , dataDir :: String
     , datafile :: DatafileDesc
+    , testAlg :: EnsembleContainer
     } deriving Show
-    
-instance Show (String->DataItem) where
-    show xs = ""
     
 defTest = TestConfig
     { ldr = Relative 0.2
@@ -54,6 +40,7 @@ defTest = TestConfig
     , resultsDir = "."
     , dataDir = "."
     , datafile = defDatafileDesc
+    , testAlg = error "defTest: must specify which algorithm to test"
     }
 
 getDataRateFactor :: DataRate -> Int -> Double
@@ -65,17 +52,11 @@ getDataRateFactor (Relative factor) _ = factor
 conf2filename :: (ClassifyModel model labelType) => TestConfig -> model -> String
 conf2filename conf model = (resultsDir conf)++"/"++(datafileName $ datafile conf)++"-"++(modelName model)++"-ldr="++(show $ ldr conf)++"-tdr="++(show $ tdr conf)++{-"-"++(show seed)++-}".csv"
 
--- performTest :: Int -> (String,BoolEnsemble (NaiveBayes.NBayes Bool)) -> Double -> [(Bool,DataPoint)] -> (String,String)
-{-performTest conf (strTrainer,trainer) bds = (out,res)-}
--- performTest :: (ClassifyModel model Bool) => TestConfig model -> model -> TrainingData Bool -> (String,String)
--- performTest :: (ClassifyModel (Ensemble model1) label0) => TestConfig model -> Ensemble model1 -> TrainingData Bool -> (String,String)
-performTest :: (ClassifyModel model Bool) => TestConfig -> Ensemble model -> TrainingData Bool -> (String,String)
-performTest conf model bds = (out,res)
+performTest :: TestConfig -> TrainingData Bool -> Map.Map String [String]
+performTest conf bds = Map.insert "performance" (reverse $ map show $ perfTrace ens finaltestdata) aitrace
     where
         rgen = mkStdGen $ seed conf
-        res = "\""++(modelName model)++"\",\""++(show $ seed conf)++"\",\""++(show $ ldr conf)++"\","++(list2csv $ perfTrace ens finaltestdata)
-        out = concat $ map (\x -> "\n"++x) aitrace
-        (ens,aitrace) = (runAI (seed conf) $ train model ls (us))
+        (ens,aitrace) = (runAI (seed conf) $ train (testAlg conf) ls (us))
         (train_data,test_data) = randSplit rgen (getDataRateFactor (tdr conf) (length bds)) bds
         (ls,us) = s2ss rgen (getDataRateFactor (ldr conf) (length train_data)) train_data
         
@@ -84,29 +65,36 @@ performTest conf model bds = (out,res)
                then test_data
                else train_data
                
-runTest :: (ClassifyModel model Bool) => TestConfig -> Ensemble model -> IO ()
-runTest conf alg = do
-    putStrLn $ "TEST = "++(show conf)++"-"++(modelName alg)++"-"++(show $ ldr conf)++"-"++(show $ seed conf)
-    let outfile = conf2filename conf alg
-    hout <- openFile outfile AppendMode
-    dm <- loadData ((dataDir conf)++"/"++(datafileName $ datafile conf)) (datafileMissingStr $ datafile conf) (datafileForce $ datafile conf)
-    test2file hout $ do
+runTest :: TestConfig -> IO ()
+runTest conf = do
+    putStrLn $ "TEST = "++(show conf)++"-"++(modelName $ testAlg conf)++"-"++(show $ ldr conf)++"-"++(show $ seed conf)
+    dm <- loadData $ applyDirPrefix (dataDir conf) (datafile conf) 
+    test2file conf $ do
         ds <- dm
         let bds = toBinaryData (datafileTrueClass $ datafile conf) ds
-        return $ performTest conf alg bds
-    hClose hout
+        return $ performTest conf bds
 
-test2file :: (Show a) => Handle -> Either a (String,String) -> IO ()
-test2file hout (Left err) = putStrLn $ show err
-test2file hout (Right (std,file)) = do
-    putStrLn std
+runTests :: [TestConfig] -> IO ()
+runTests ts = do
+    sequence_ [ runTest t | t <- ts ]
+
+
+test2file :: (Show a) => TestConfig -> Either a (Map.Map String [String]) -> IO ()
+test2file conf (Left err) = putStrLn $ show err
+test2file conf (Right logai) = do
+    let outfile = trace ("outfile="++(conf2filename conf $ testAlg conf)) $ conf2filename conf $ testAlg conf
+    hout <- openFile outfile AppendMode
+    putStrLn $ concat $ map ("\n"++) $ Map.findWithDefault [] "print" logai 
     putStrLn "Writing next line to CSV"
-    putStrLn file
-    hPutStrLn hout file
+    putStrLn $ csvLine "performance"
+    hPutStrLn hout $ csvLine "performance"
+    hPutStrLn hout $ csvLine "aveMargin"
     hFlush hout
     putStrLn "Done."
+    hClose hout
+    
+    where
+        csvLine str = (show $ testAlg conf)++","++(show $ seed conf)++","++str++","++(list2csv $ reverse $ Map.findWithDefault ["csvLine error"] str logai)
 
--- perfTrace :: Ensemble model -> [(Bool,[SqlValue])] -> [Double]
--- perfTrace (Ensemble es) ds = [ show $ middle (es !! i) | i <- [0..length es]] 
--- perfTrace (Ensemble es) ds = [ eval (classify $ Ensemble $ drop i es) ds | i <- [0..length es]] 
-perfTrace (Ensemble params es) ds = [ errorRate $ genConfusionMatrix (classify $ Ensemble params $ drop i es) ds | i <- [0..length es]] 
+-- perfTrace (Ensemble params es) ds = [ errorRate $ genConfusionMatrix (classify $ Ensemble params $ drop i es) ds | i <- [0..length es]] 
+perfTrace (EC (Ensemble params es)) ds = [ errorRate $ genConfusionMatrix (classify $ Ensemble params $ drop i es) ds | i <- [0..length es]] 

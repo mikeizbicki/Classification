@@ -123,9 +123,18 @@ boostErrComp xs =
     mconcat $ concat 
     [ [head $ tail $ mkErrLines color ys] | (color,ys) <- xs ]
         
+-------------------------------------------------------------------------------
 -- plotting IO
-          
-loadResults plottingFunc filename = liftM (liftM $ plottingFunc $ nocsv filename) $ loadCSV filename
+
+loadResults :: String -> (String -> [[String]] -> r) -> String -> IO (Either ParseError r)
+
+-- loadResults {-rowfilter-} plottingFunc filename = liftM (liftM $ plottingFunc $ nocsv filename) $ loadCSV filename
+loadResults rowfilter plottingFunc filename = do
+    eitherCSV <- loadCSV filename
+    return $ do
+        csv <- eitherCSV
+        return $ plottingFunc (nocsv $ filename) $ filter (\xs -> xs!!2==rowfilter) csv
+   
 nocsv str = trace str $
     if (take 4 $ reverse str)=="vsc."
         then reverse $ drop 4 $ reverse str
@@ -133,10 +142,12 @@ nocsv str = trace str $
 
 plotFile file = do
     putStrLn $ "Plotting results for: "++file
-    eitherBoostErr <- loadResults csv2boostErr file
-    eitherBoostHist <- loadResults csv2boostHist file
+    eitherBoostErr <- loadResults "performance" csv2boostErr file
+    eitherBoostMargin <- loadResults "aveMargin" csv2boostErr file
+    eitherBoostHist <- loadResults "performance" csv2boostHist file
     sequence_
         [ Plot.plot (PS.cons $ file++".boostErr.ps") $ boostErr $ right eitherBoostErr
+        , Plot.plot (PS.cons $ file++".boostMargin.ps") $ boostErr $ right eitherBoostMargin
 --         , Plot.plot (PS.cons $ file++".boostHist.ps") $ boostHist $ right eitherBoostHist
         ]    
     plot (file++".boostHistogram.ps") $ histogram binSturges $ right eitherBoostHist
@@ -144,7 +155,7 @@ right (Right xs) = xs
           
 algCompare resdir fs = do
     putStrLn $ "Plotting comparison for: "++(show fs)
-    eitherBoostErr <- sequence [loadResults csv2boostErr f | f<-fs]
+    eitherBoostErr <- sequence [loadResults "performance" csv2boostErr f | f<-fs]
     sequence_
         [ Plot.plot (PS.cons $ resdir++"/comp."++{-(show fs)++-}".boostErr.ps") $ boostErrComp $ 
             zip [ Color.red, Color.orange, Color.green, Color.blue, Color.purple, Color.black ]
@@ -175,7 +186,7 @@ statsAllFiles tmpdir resdir = do
 
 statsFile hout file = do
     hPutStr hout $ "Statistics for: "++file++"  ;  "
-    eitherStats <- loadResults csv2stats file
+    eitherStats <- loadResults "performance" csv2stats file
     let stats=right eitherStats
     hPutStr hout $ "mean="++(show $ stats !! 0)++"  ;  "
     hPutStr hout $ "stddev="++(show $ stats !! 1)++"  ;  "

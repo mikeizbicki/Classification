@@ -6,7 +6,7 @@ This is a modified version of the C4.5 decision tree introduced by Ross Quinlan.
    
 -}
 
-module AI.Supervised.DecisionTree
+module AI.Classification.DecisionTree
     ( train
     , classify
     , probClassify
@@ -16,7 +16,6 @@ module AI.Supervised.DecisionTree
     where
 
 import AI.Classification
-import AI.Ensemble
 
 import Data.List
 import Data.List.Extras
@@ -127,7 +126,7 @@ splitDataDouble xs attrI =
             , splitCond = (snd $ head $ splits!!1) !!attrI
             , children = Map.empty
             , tmpSplits = splits
-            , maxDepth = undefined
+            , maxDepth = -1 -- FIXME: This is a very ugly hack
             }
     where
         splits = argmax (\x -> infoGain xs x) $ splitList
@@ -144,7 +143,7 @@ splitDataString xs attrI =
         , splitCond = Discrete ""
         , children = Map.empty
         , tmpSplits = splits
-        , maxDepth = error "Need to initialize depth somehow"
+        , maxDepth = -1 -- FIXME: error "Need to initialize depth somehow"
         }
     where 
         splits = Map.elems $ splitDataMap xs attrI Map.empty

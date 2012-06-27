@@ -1,16 +1,33 @@
-{-# LANGUAGE ConstraintKinds, RankNTypes, FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, ConstraintKinds, RankNTypes, FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
 
 module AI.Classification 
     where
       
 import Control.Monad.Writer
 import Control.Monad.Random
+import Control.Monad.State
 import System.Random
 import Data.List
+import Data.List.Extras
 import Debug.Trace
 
 import qualified Data.Map as Map
 import qualified Data.Vector as V
+
+-------------------------------------------------------------------------------
+-- classifiers
+
+class ClassifyModel model label | model -> label where
+    modelName :: model -> String
+    
+    train :: model -> TrainingData label -> UnlabeledData -> LogAI model
+--     train m ls us = liftM snd $ trainVerbose m ls us
+--     trainVerbose :: model -> TrainingData label -> UnlabeledData -> LogAI (verbose,model)
+
+    probClassify :: model -> DataPoint -> [(label,Prob)]
+    
+    classify :: model -> DataPoint -> label
+    classify model dp = fst $ argmaxBy compare snd $ probClassify model dp
 
 -------------------------------------------------------------------------------
 -- data types
@@ -119,11 +136,51 @@ errorRate (CM xs) = err $ foldl add (0,0) $ map (\(l,(t,f))->(t,f)) $ Map.toList
 -------------------------------------------------------------------------------
 -- Logging
 
+-- type LogAIRand a g = (RandomGen g) => RandT g (Writer [String]) a
+-- type LogAI a = RandT StdGen (Writer [String]) a
+-- 
+-- logAI :: String -> LogAI ()
+-- logAI str = tell [str]
+-- 
+-- runAI :: Int -> LogAI a -> (a,[String])
+-- runAI seed m = runWriter $ evalRandT m (mkStdGen seed)
+
+
+
+
 type LogAIRand a g = (RandomGen g) => RandT g (Writer [String]) a
-type LogAI a = RandT StdGen (Writer [String]) a
+type LogAI a = RandT StdGen (State LogType) a
 
-logAI :: MonadWriter [String] m => String -> m ()
-logAI str = tell [str]
+type LogType = Map.Map String [String]
 
-runAI :: Int -> LogAI a -> (a,[String])
-runAI seed m = runWriter $ evalRandT m (mkStdGen seed)
+-- data LogType = LogMap (Map.Map (String,Int) (LogType))
+--              | LogString String
+--     deriving Show
+
+emptyLogAI = {-LogMap $ -}Map.empty
+
+-- startContext :: String -> LogAI ()
+-- startContext context = do
+--     history <- get
+--     put $ Map.insert context Map.empty history
+-- 
+-- endContext :: LogAI ()
+-- endContext = return ()
+
+
+
+logAI :: String -> String -> LogAI ()
+logAI key value = do
+    history <- get
+    put $ Map.insertWith (\x y-> y++x) key [value] history
+
+runAI :: Int -> LogAI a -> (a,LogType)
+runAI seed m = runState (evalRandT m (mkStdGen seed)) emptyLogAI
+
+testFunc = do
+--     startContext "testFunc"
+    logAI "food" "1"
+    logAI "food" "2"
+    logAI "food" "3"
+
+--     endContext
