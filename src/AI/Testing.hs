@@ -49,8 +49,18 @@ getDataRateFactor (Relative factor) _ = factor
 
 -------------------------------------------------------------------------------
 
-conf2filename :: (ClassifyModel model labelType) => TestConfig -> model -> String
-conf2filename conf model = (resultsDir conf)++"/"++(datafileName $ datafile conf)++"-"++(modelName model)++"-ldr="++(show $ ldr conf)++"-tdr="++(show $ tdr conf)++{-"-"++(show seed)++-}".csv"
+runTests :: [TestConfig] -> IO ()
+runTests ts = do
+    sequence_ [ runTest t | t <- ts ]
+
+runTest :: TestConfig -> IO ()
+runTest conf = do
+    putStrLn $ "TEST = "++(show conf)++"-"++(modelName $ testAlg conf)++"-"++(show $ ldr conf)++"-"++(show $ seed conf)
+    dm <- loadData $ applyDirPrefix (dataDir conf) (datafile conf) 
+    test2file conf $ do
+        ds <- dm
+        let bds = toBinaryData (datafileTrueClass $ datafile conf) ds
+        return $ performTest conf bds
 
 performTest :: TestConfig -> TrainingData Bool -> Map.Map String [String]
 performTest conf bds = Map.insert "performance" (reverse $ map show $ perfTrace ens finaltestdata) aitrace
@@ -64,20 +74,6 @@ performTest conf bds = Map.insert "performance" (reverse $ map show $ perfTrace 
             if (inductive conf)
                then test_data
                else train_data
-               
-runTest :: TestConfig -> IO ()
-runTest conf = do
-    putStrLn $ "TEST = "++(show conf)++"-"++(modelName $ testAlg conf)++"-"++(show $ ldr conf)++"-"++(show $ seed conf)
-    dm <- loadData $ applyDirPrefix (dataDir conf) (datafile conf) 
-    test2file conf $ do
-        ds <- dm
-        let bds = toBinaryData (datafileTrueClass $ datafile conf) ds
-        return $ performTest conf bds
-
-runTests :: [TestConfig] -> IO ()
-runTests ts = do
-    sequence_ [ runTest t | t <- ts ]
-
 
 test2file :: (Show a) => TestConfig -> Either a (Map.Map String [String]) -> IO ()
 test2file conf (Left err) = putStrLn $ show err
@@ -89,12 +85,17 @@ test2file conf (Right logai) = do
     putStrLn $ csvLine "performance"
     hPutStrLn hout $ csvLine "performance"
     hPutStrLn hout $ csvLine "aveMargin"
+    hPutStrLn hout $ csvLine "weights-mean"
+    hPutStrLn hout $ csvLine "weights-stddev"
     hFlush hout
     putStrLn "Done."
     hClose hout
     
     where
         csvLine str = (show $ testAlg conf)++","++(show $ seed conf)++","++str++","++(list2csv $ reverse $ Map.findWithDefault ["csvLine error"] str logai)
+
+conf2filename :: (ClassifyModel model labelType) => TestConfig -> model -> String
+conf2filename conf model = (resultsDir conf)++"/"++(datafileName $ datafile conf)++"-"++(modelName model)++"-ldr="++(show $ ldr conf)++"-tdr="++(show $ tdr conf)++{-"-"++(show seed)++-}".csv"
 
 -- perfTrace (Ensemble params es) ds = [ errorRate $ genConfusionMatrix (classify $ Ensemble params $ drop i es) ds | i <- [0..length es]] 
 perfTrace (EC (Ensemble params es)) ds = [ errorRate $ genConfusionMatrix (classify $ Ensemble params $ drop i es) ds | i <- [0..length es]] 

@@ -144,10 +144,14 @@ plotFile file = do
     putStrLn $ "Plotting results for: "++file
     eitherBoostErr <- loadResults "performance" csv2boostErr file
     eitherBoostMargin <- loadResults "aveMargin" csv2boostErr file
+    eitherBoostWeightsMean <- loadResults "weights-mean" csv2boostErr file
+    eitherBoostWeightsStddev <- loadResults "weights-stddev" csv2boostErr file
     eitherBoostHist <- loadResults "performance" csv2boostHist file
     sequence_
         [ Plot.plot (PS.cons $ file++".boostErr.ps") $ boostErr $ right eitherBoostErr
         , Plot.plot (PS.cons $ file++".boostMargin.ps") $ boostErr $ right eitherBoostMargin
+        , Plot.plot (PS.cons $ file++".boostWeightsMean.ps") $ boostErr $ right eitherBoostWeightsMean
+        , Plot.plot (PS.cons $ file++".boostWeightsStddev.ps") $ boostErr $ right eitherBoostWeightsStddev
 --         , Plot.plot (PS.cons $ file++".boostHist.ps") $ boostHist $ right eitherBoostHist
         ]    
     plot (file++".boostHistogram.ps") $ histogram binSturges $ right eitherBoostHist

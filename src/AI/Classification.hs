@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, ConstraintKinds, RankNTypes, FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
+{-# LANGUAGE ExistentialQuantification, MultiParamTypeClasses, FunctionalDependencies, ConstraintKinds, RankNTypes, FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
 
 module AI.Classification 
     where
@@ -28,6 +28,14 @@ class ClassifyModel model label | model -> label where
     
     classify :: model -> DataPoint -> label
     classify model dp = fst $ argmaxBy compare snd $ probClassify model dp
+
+data ClassifyContainer label = forall model . (ClassifyModel model label) =>
+        CC { fetchClassifyModel :: model }
+
+instance ClassifyModel (ClassifyContainer label) label {-| (ClassifyContainer label) -> label-} where
+    modelName (CC model) = modelName model
+    train (CC model) td ud = liftM CC $ train model td ud
+    probClassify (CC model) = probClassify model
 
 -------------------------------------------------------------------------------
 -- data types

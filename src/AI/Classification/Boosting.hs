@@ -11,6 +11,7 @@ module AI.Classification.Boosting
 import AI.Classification
 import AI.RandomUtils
 import AI.Classification.KNN
+import AI.MathTmp
 
 import Control.Monad
 import Debug.Trace
@@ -85,12 +86,20 @@ mkBoost params = EC $ Ensemble
 -------------------------------------------------------------------------------
 -- The BoostAlg class follows the code for ASSEMBLE, since it is the most general
 
+lineSearch :: (BoostAlg alg)=>TrainingVec Bool model alg -> Double
+lineSearch tv = (1/2) * (log $ (1-err)/(err+0.00001))
+    where
+        err = boostErr tv
+            
 class BoostAlg alg where
     boostAlgName :: alg -> String
+    boostUseUnlabeledDataPoints :: TrainingVec Bool model alg -> Bool
     
     indices :: TrainingVec Bool model alg -> [Int]
-    indices tv = [0..(V.length $ labels tv)-1]
-    
+    indices tv = if boostUseUnlabeledDataPoints tv
+                    then [0..(V.length $ labels tv)-1]
+                    else [0..(numLabels tv)-1]
+                    
     boostErr :: TrainingVec Bool model alg -> Double
     boostErr tv = sum [ (indicator $ _y i /= _f i)*(_D i) | i <- indices tv ]
         where
@@ -113,194 +122,13 @@ class BoostAlg alg where
             alpha tv i =
                 if i<numLabels tv
                    then 1
-                   else 0.05
+                   else 0.15
             
             margin i = (bool2num $ _y' i)*(_F' i)
 
             _F' i = (_F_vec tv') V.! i
             _y' i = (labels tv') V.! i
 
----------------------------------------
--- ASSEMBLE
-
-data ASSEMBLE = ASSEMBLE
-
-instance BoostAlg ASSEMBLE where
-    boostAlgName _ = "ASSEMBLE"
-
----------------------------------------
--- ASSEMBLE.LogitBoost
-
-data LogitASSEMBLE = LogitASSEMBLE
-
-instance BoostAlg LogitASSEMBLE where
-    boostAlgName _ = "ASSEMBLE.LogitBoost"
-
-    boostNewWeight tv' i = (alpha tv' i)*(cost' $ margin i)
-        where
-            cost  z = log $ 1+(exp $ -z)
-            cost' z = {-trace ("z="++show z) $ -}-2*(exp $ -2*z)/(log $ 1+(exp $ -2*z))
-            
-            
-            alpha tv i =
-                if i<numLabels tv
-                   then 1
-                   else 0.05
-
-            margin i = 
-                if m>10
-                   then {-trace ("m="++show m) -}10
-                   else m
-                where m=(bool2num $ _y' i)*(_F' i)
-
-            _F' i = (_F_vec tv') V.! i
-            _y' i = (labels tv') V.! i
-
----------------------------------------
--- EntropyBoost (See "Information Theoretic Regularization for Semi-Supervised Boosting," Zheng, Wang, Liu.
-
-data EntropyBoost = EntropyBoost
-
-instance BoostAlg EntropyBoost where
-    boostAlgName _ = "EntropyBoost"
-
---     boostErr tv = sum [ (indicator $ _y i /= _f i)*(_D i) | i <- indices tv ]
---         where
---             _f i = (_f_vec tv) V.! i
---             _x i = (dataPoints tv) VB.! i
---             _y i = (labels tv) V.! i
---             _D i = (weights tv) V.! i
-
-
-    boostNewWeight tv' i =
-        if i<(numLabels tv')
-           then (cost_label' $ margin i)
-           else gamma*(sum [(cost_unlabel' $ (bool2num y)*(margin_F' i)) | y <- [True, False]])
-           
-        where
-            
-            fart z more = if (log $ 1+(exp $ -z))==0
-                                then error $ "poop z="++show z
-                                else more
-            
-            cost_label  z = log $ 1+(exp $ -z)
-            cost_label' z = -(exp $ -z)/(log $ 1+(exp $ -z))
-            
-            cost_unlabel  z = (log $ 1+(exp $ -z))/(1+(exp $ -z))
---             cost_unlabel' z = (-1 + (log $ 1+(exp $ -z)))*(exp $ -z)/(log $ 1+(exp $ -z))^2
-            cost_unlabel' z = (-1 + (log $ 1+(exp $ -z)))/(1+(exp $ -z)) * (cost_label' z)
-            
---             margin i = (bool2num $ _y' i)*(_F' i)
-            margin i = (bool2num $ _y' i)*(margin_F' i)
-            margin_F' i = 
-                if (_F' i)>10
-                   then 10
-                   else _F' i
-
-            _F' i = (_F_vec tv') V.! i
-            _y' i = (labels tv') V.! i
-            
-            gamma = 0.001
-
----------------------------------------
--- RegularizedBoost
-
-data RegularizedBoost = RegularizedBoost
-
-instance BoostAlg RegularizedBoost where
-    boostAlgName _ = "RegularizedBoost"
-
-    boostErr tv = trace ("left="++show left++" >> right="++show right) left+right
-
-        where
-            left =   sum [ (indicator $ _y i /= _f i)*(_D i) | i <- indices tv ]
-            right= -(sum [ (indicator $ _y i == _f i)*(betaR tv i) | i <- indices tv ]
-                    /sum [ (cost' $ margin i) - (betaR tv i)| i<- indices tv]
-                    )
-            _F i = (_F_vec tv) V.! i
-            _f i = (_f_vec tv) V.! i
-            _x i = (dataPoints tv) VB.! i
-            _y i = (labels tv) V.! i
-            _D i = (weights tv) V.! i
-            
-            cost  z =  (exp $ -z)
-            cost' z = -(exp $ -z)
-            margin i = (bool2num $ _y i)*(_F i)
-
-    boostNewWeight tv' i = (alpha i)*(cost' $ margin i) - (betaR tv' i)
-        where
-            alpha i = 1
-            margin i = (bool2num $ _y' i)*(_F' i)
-            
-            cost  z =  (exp $ -z)
-            cost' z = -(exp $ -z)
-            
-            _F' i = (_F_vec tv') V.! i
-            _y' i = (labels tv') V.! i
-
-betaR tv i = (beta i)*(_R i)
-    where
-        beta i = 0.5
-        _R i = sum [(similarity (_x i) (_x j))*(cost_tilde $ (-1)*(compatability i j)) 
-                   | j <- filter (i/=) $ indices tv
-                   ]
-        
-        cost  z =  (exp $ -z)
-        cost' z = -(exp $ -z)
-        cost_tilde z = (cost z)-1
-        
-        compatability i j = abs $ (bool2num $ _y i)-(bool2num $ _y j)
-        
-        _F i = (_F_vec tv) V.! i
-        _y i = (labels tv) V.! i
-        _x i = (dataPoints tv) VB.! i
-        
-similarity :: DataPoint -> DataPoint -> Double
-similarity dp1 dp2 = {-trace (" << diff="++show diff++" << res="++show res)-} res
-    where res = exp $ (-1 * ({-sqrt $ -}diff) / (2*sigma^2))
-          sigma = 5
-          diff = sum [ (dataminus x1 x2)^2 | (x1,x2) <- zip dp1 dp2] :: Double
-          
-          
-dataminus :: DataItem -> DataItem -> Double
-dataminus (Continuous x1) (Continuous x2) = x1 - x2
-dataminus (Discrete x1) (Discrete x2) = 
-    if (x1==x2)
-       then 0
-       else 1
-
----------------------------------------
--- AdaBoost
-
-data AdaBoost = AdaBoost
-
-instance BoostAlg AdaBoost where
-    boostAlgName _ = "AdaBoost"
-    indices tv = [0..(numLabels tv)-1]
-
----------------------------------------
--- LogitBoost
-
-data LogitBoost = LogitBoost
-
-instance BoostAlg LogitBoost where
-    boostAlgName _ = "LogitBoost"
-
-    indices tv = [0..(numLabels tv)-1]
-
-    boostNewWeight tv' i = (cost' $ margin i)
-        where
-            cost  z = log $ 1+(exp $ -2*z)
-            cost' z = {-trace ("z="++show z) $ -}-2*(exp $ -2*z)/(log $ 1+(exp $ -2*z))
-            
-            margin i = 
-                if m>10
-                   then {-trace ("m="++show m) -}10
-                   else m
-                where m=(bool2num $ _y' i)*(_F' i)
-
-            _F' i = (_F_vec tv') V.! i
-            _y' i = (labels tv') V.! i
 
 -------------------------------------------------------------------------------
 
@@ -378,7 +206,7 @@ trainItr params tv = do
                  }
 {-    let www1=V.fromList [boostNewWeight tv' i | i<- indexAll]
     let www2=trace ("\n\n"++show www1) $ normalizeVector www1
-    let weightsVec = trace ("\n\n"++show www2) www2-}
+    let weightsVec = trace ("\n\n stddev="++show www2) www2-}
     let weightsVec = normalizeVector $ V.fromList [boostNewWeight tv' i | i<- indexAll]
     
     nextrand <- getRandom
@@ -402,6 +230,8 @@ trainItr params tv = do
 
     let aveMargin = (sum [ (bool2num $ _y i)*(_F i) | i<-indices tv])/(fromIntegral $ length $ indices tv)
     logAI "aveMargin" $ show $ aveMargin
+    logAI "weights-mean" $ show $ mean $ V.toList weightsVec
+    logAI "weights-stddev" $ show $ stddev $ V.toList weightsVec
 
     -----------------------------------
     -- recurse

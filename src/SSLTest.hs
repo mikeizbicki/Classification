@@ -10,13 +10,20 @@ import AI.Classification.NaiveBayes
 import AI.Classification.KNN
 -- import AI.Classification.SemiBoost
 import AI.Classification.Boosting
-          
+import AI.Classification.Boosting.AdaBoost
+import AI.Classification.Boosting.ASSEMBLE
+import AI.Classification.Boosting.LogitBoost
+import AI.Classification.Boosting.LogitASSEMBLE
+import AI.Classification.Boosting.EntropyBoost
+import AI.Classification.Boosting.MutualInformationBoost
+import AI.Classification.Boosting.RegularizedBoost
+
 main = do
     let boostParams = BoostParams 
-            { iterations = 100
+            { iterations = 20
             , sampleRate = Auto -- Relative 0.1
             , obeyStopCriteria = True
-            , modelConf = (defDTree {maxDepth=1})
+            , modelConf = (defDTree {maxDepth=4})
 --             , modelConf = (defKNN {k=3})
 --             , modelConf = (defNBayes)
             , boostAlg = ASSEMBLE
@@ -25,9 +32,9 @@ main = do
     runTests
         [ defTest 
             { datafile=testdatafile
-            , ldr=Relative 0.15
+            , ldr=Relative 0.2
             , tdr=Relative 0.8
-            , inductive = True
+            , inductive = False
             , seed=seed
             , dataDir ="../testdata"
             , resultsDir="../results"
@@ -56,11 +63,12 @@ main = do
 --             (mkBoost $ boostParams { boostAlg=ASSEMBLE }):
 --             (mkBoost $ boostParams { boostAlg=LogitBoost }):
 --             (mkBoost $ boostParams { boostAlg=LogitASSEMBLE }):
+            
 --             (mkBoost $ boostParams { boostAlg=SemiBoost }):
-
---             (mkBoost $ boostParams { boostAlg=RegularizedBoost })
-            (mkBoost $ boostParams { boostAlg=EntropyBoost }):
+            (mkBoost $ boostParams { boostAlg=RegularizedBoost }):
+--             (mkBoost $ boostParams { boostAlg=EntropyBoost }):
+--             (mkBoost $ boostParams { boostAlg=MutualInformationBoost }):
             []
 --         , tdr <- map Absolute [{-200,400,-}600]
-        , seed <- [1..1000]
+        , seed <- [1..20]
         ]
